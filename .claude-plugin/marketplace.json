@@ -13,7 +13,7 @@
       "name": "jiegou",
       "source": "./plugins/jiegou-channel",
       "description": "Connect Claude Code to JieGou for governed task dispatch, approval workflows, and audit trails. Receive tasks from the JieGou console and send results back via WebSocket.",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "author": {
         "name": "JieGou",
         "email": "support@jiegou.ai"

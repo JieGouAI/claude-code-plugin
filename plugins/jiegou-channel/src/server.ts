@@ -3,18 +3,22 @@
 /**
  * JieGou Claude Code Channel Server
  *
- * An MCP server that bridges Claude Code to the JieGou platform.
- * Connects to Claude Code over stdio (MCP protocol) and to the
- * JieGou WebSocket service for receiving tasks and sending results.
+ * An MCP channel server that bridges Claude Code to the JieGou platform.
+ * Uses the low-level Server API to declare the experimental claude/channel
+ * capability, enabling task events to arrive in Claude Code's context as
+ * <channel source="jiegou" ...> tags.
  *
  * Tools:
  *   jiegou_reply  — Send a task result back to JieGou
  *   jiegou_status — Report current WebSocket connection status
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import {
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { WebSocket } from 'ws';
 import { loadConfig, type ChannelConfig } from './config.js';
 
@@ -34,139 +38,191 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let pongTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ─── MCP Server Setup ──────────────────────────────────────────────────────
+// ─── MCP Channel Server Setup ───────────────────────────────────────────────
+// Uses the low-level Server API (not McpServer) to declare the experimental
+// claude/channel capability. This is what makes Claude Code register a
+// notification listener and render incoming events as:
+//   <channel source="jiegou" task_id="..." task_type="..." priority="...">
 
-const server = new McpServer(
+const mcp = new Server(
+  { name: 'jiegou', version: '0.1.0' },
   {
-    name: 'jiegou-channel',
-    version: '1.0.0',
-  },
-  {
+    capabilities: {
+      experimental: { 'claude/channel': {} },
+      tools: {},
+    },
     instructions: [
-      'You are connected to the JieGou platform via a WebSocket channel.',
-      'When you receive a task notification, work on it using your available tools and context.',
-      'Use jiegou_reply to send results back when done.',
-      'Use jiegou_status to check the current connection state.',
+      'You are connected to the JieGou AI workflow automation platform.',
+      'Tasks arrive as <channel source="jiegou" task_id="..." task_type="..." priority="...">.',
+      'Execute the task using your local tools and context.',
+      'When done, use the jiegou_reply tool to send results back, passing the task_id.',
+      'For multi-step tasks, send progress updates with status="in_progress".',
+      'Send status="completed" when done or status="error" if something fails.',
     ].join(' '),
   },
 );
 
-// ─── Tool: jiegou_reply ─────────────────────────────────────────────────────
+// ─── Tool Definitions ───────────────────────────────────────────────────────
 
-server.tool(
-  'jiegou_reply',
-  'Send a task result back to the JieGou platform',
+const TOOLS = [
   {
-    task_id: z.string().describe('The ID of the task being responded to'),
-    status: z
-      .enum(['in_progress', 'completed', 'error'])
-      .describe('Current status of the task'),
-    result: z.string().describe('The result or output of the task'),
-    files: z
-      .array(z.string())
-      .optional()
-      .describe('Optional list of file paths that were created or modified'),
+    name: 'jiegou_reply',
+    description: 'Send a task result back to the JieGou platform',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        task_id: {
+          type: 'string',
+          description: 'The ID of the task being responded to',
+        },
+        status: {
+          type: 'string',
+          enum: ['in_progress', 'completed', 'error'],
+          description: 'Current status of the task',
+        },
+        result: {
+          type: 'string',
+          description: 'The result or output of the task',
+        },
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional list of file paths that were created or modified',
+        },
+      },
+      required: ['task_id', 'status', 'result'],
+    },
   },
-  async ({ task_id, status, result, files }) => {
+  {
+    name: 'jiegou_status',
+    description: 'Report the current JieGou WebSocket connection status',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+];
+
+export { TOOLS };
+
+// ─── Tool Handlers ──────────────────────────────────────────────────────────
+
+mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: TOOLS,
+}));
+
+mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
+  const { name, arguments: args } = req.params;
+
+  if (name === 'jiegou_reply') {
+    const { task_id, status, result, files } = args as {
+      task_id: string;
+      status: string;
+      result: string;
+      files?: string[];
+    };
+
     if (!ws || !wsConnected || !wsAuthenticated) {
       return {
         content: [
           {
             type: 'text' as const,
-            text: 'Error: Not connected to JieGou WebSocket. Use jiegou_status to check connection.',
+            text: 'Error: Not connected to JieGou. Use jiegou_status to check.',
           },
         ],
       };
     }
 
-    const message = JSON.stringify({
-      type: 'task_result',
-      taskId: task_id,
-      status,
-      result,
-      files,
-    });
-
     try {
-      ws.send(message);
+      ws.send(
+        JSON.stringify({
+          type: 'task_result',
+          taskId: task_id,
+          status,
+          result,
+          files,
+        }),
+      );
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Task result sent successfully. task_id=${task_id}, status=${status}`,
+            text: `Task result sent. task_id=${task_id}, status=${status}`,
           },
         ],
       };
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Error sending task result: ${errorMsg}`,
+            text: `Error sending result: ${err instanceof Error ? err.message : String(err)}`,
           },
         ],
       };
     }
-  },
-);
+  }
 
-// ─── Tool: jiegou_status ────────────────────────────────────────────────────
-
-server.tool(
-  'jiegou_status',
-  'Report the current JieGou WebSocket connection status',
-  {},
-  async () => {
-    const status = {
-      connected: wsConnected,
-      authenticated: wsAuthenticated,
-      wsUrl: config.wsUrl,
-      accountId: config.accountId,
-    };
+  if (name === 'jiegou_status') {
     return {
       content: [
         {
           type: 'text' as const,
-          text: JSON.stringify(status, null, 2),
+          text: JSON.stringify(
+            {
+              connected: wsConnected,
+              authenticated: wsAuthenticated,
+              wsUrl: config.wsUrl,
+              accountId: config.accountId,
+            },
+            null,
+            2,
+          ),
         },
       ],
     };
-  },
-);
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
+});
 
 // ─── WebSocket Connection ───────────────────────────────────────────────────
 
-function connectWebSocket(config: ChannelConfig): void {
+function connectWebSocket(cfg: ChannelConfig): void {
   if (ws) {
     cleanupWebSocket();
   }
 
-  log(`Connecting to ${config.wsUrl}...`);
+  log(`Connecting to ${cfg.wsUrl}...`);
 
-  ws = new WebSocket(config.wsUrl, {
-    headers: { Authorization: `Bearer ${config.apiKey}` },
+  ws = new WebSocket(cfg.wsUrl, {
+    headers: { Authorization: `Bearer ${cfg.apiKey}` },
   });
 
   ws.onopen = () => {
     log('WebSocket connected');
     wsConnected = true;
 
-    // Authenticate
+    // Register as a claude_code_channel client.
+    // Auth is via the Bearer header already sent on connect — this message
+    // just tells the proxy what type of client we are and which account.
     ws!.send(
       JSON.stringify({
-        type: 'authenticate',
-        apiKey: config.apiKey,
+        type: 'register',
         clientType: 'claude_code_channel',
-        accountId: config.accountId,
+        accountId: cfg.accountId,
       }),
     );
 
-    startHeartbeat(config);
+    wsAuthenticated = true;
+    startHeartbeat(cfg);
   };
 
   ws.onmessage = (event: WebSocket.MessageEvent) => {
-    const raw = typeof event.data === 'string' ? event.data : event.data.toString();
+    const raw =
+      typeof event.data === 'string' ? event.data : event.data.toString();
 
     // Silently handle pong
     if (raw === '{"type":"pong"}') {
@@ -187,46 +243,52 @@ function connectWebSocket(config: ChannelConfig): void {
 
     const { type } = data;
 
-    if (type === 'auth_status') {
-      if (data.success) {
-        log('Authentication successful');
-        wsAuthenticated = true;
-      } else {
-        log('Authentication failed:', data.message || 'unknown reason');
-        wsAuthenticated = false;
-      }
-      return;
-    }
-
     if (type === 'task') {
-      log(`Received task: ${data.taskId}`);
-      // Push task as a channel notification to Claude Code.
-      // The MCP SDK will deliver this as a notification the client can act on.
-      server.server.notification({
-        method: 'notifications/message',
+      const taskId = String(data.id || data.taskId || '');
+      const taskType = String(data.taskType || 'freeform');
+      const priority = String(data.priority || 'normal');
+      const createdBy = String(data.createdBy || '');
+      const instructions = String(data.instructions || '');
+
+      log(`Received task: ${taskId} (${taskType}, ${priority})`);
+
+      // Push task as a channel notification.
+      // This uses the claude/channel notification method so Claude Code
+      // renders it as: <channel source="jiegou" task_id="..." ...>content</channel>
+      mcp.notification({
+        method: 'notifications/claude/channel',
         params: {
-          level: 'info',
-          data: {
-            type: 'task',
-            taskId: data.taskId,
-            title: data.title,
-            description: data.description,
-            context: data.context,
+          content: instructions,
+          meta: {
+            task_id: taskId,
+            task_type: taskType,
+            priority,
+            created_by: createdBy,
           },
         },
       });
       return;
     }
 
-    log('Received message type:', type);
+    if (type === 'error') {
+      log('Server error:', data.message || 'unknown');
+      return;
+    }
+
+    // Other message types
+    if (type !== 'pong') {
+      log('Received message type:', type);
+    }
   };
 
   ws.onclose = (event: WebSocket.CloseEvent) => {
-    log(`WebSocket closed: code=${event.code} reason=${event.reason || 'none'}`);
+    log(
+      `WebSocket closed: code=${event.code} reason=${event.reason || 'none'}`,
+    );
     wsConnected = false;
     wsAuthenticated = false;
     stopHeartbeat();
-    scheduleReconnect(config);
+    scheduleReconnect(cfg);
   };
 
   ws.onerror = (event: WebSocket.ErrorEvent) => {
@@ -236,7 +298,7 @@ function connectWebSocket(config: ChannelConfig): void {
 
 // ─── Heartbeat ──────────────────────────────────────────────────────────────
 
-function startHeartbeat(config: ChannelConfig): void {
+function startHeartbeat(cfg: ChannelConfig): void {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -248,7 +310,7 @@ function startHeartbeat(config: ChannelConfig): void {
       log('Heartbeat timeout — no pong received, closing connection');
       ws?.close();
     }, 5_000);
-  }, config.heartbeatInterval);
+  }, cfg.heartbeatInterval);
 }
 
 function stopHeartbeat(): void {
@@ -264,13 +326,13 @@ function stopHeartbeat(): void {
 
 // ─── Reconnect ──────────────────────────────────────────────────────────────
 
-function scheduleReconnect(config: ChannelConfig): void {
+function scheduleReconnect(cfg: ChannelConfig): void {
   if (reconnectTimer) return;
-  log(`Reconnecting in ${config.reconnectDelay / 1000}s...`);
+  log(`Reconnecting in ${cfg.reconnectDelay / 1000}s...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    connectWebSocket(config);
-  }, config.reconnectDelay);
+    connectWebSocket(cfg);
+  }, cfg.reconnectDelay);
 }
 
 function cleanupWebSocket(): void {
@@ -300,11 +362,11 @@ function cleanupWebSocket(): void {
 const config = loadConfig();
 
 async function main(): Promise<void> {
-  log('Starting JieGou Claude Code channel server');
+  log('Starting JieGou Claude Code channel server v0.1.0');
 
   // Connect to Claude Code over stdio
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await mcp.connect(transport);
   log('MCP stdio transport connected');
 
   // Connect to JieGou WebSocket

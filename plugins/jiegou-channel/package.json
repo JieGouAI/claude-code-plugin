@@ -1,6 +1,6 @@
 {
   "name": "@jiegou/claude-code-channel",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "MCP channel server connecting Claude Code to the JieGou platform via WebSocket",
   "type": "module",
   "main": "src/server.ts",
@@ -14,8 +14,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
-    "ws": "^8.18.0",
-    "zod": "^3.24.0"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.2",

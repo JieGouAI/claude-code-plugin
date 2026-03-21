@@ -1,7 +1,7 @@
 {
   "name": "jiegou",
   "description": "Connect Claude Code to JieGou — governed AI workflow automation with approval gates, audit trails, and RBAC. Receive tasks from the JieGou console and send results back via WebSocket.",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "JieGou",
     "url": "https://jiegou.ai"
