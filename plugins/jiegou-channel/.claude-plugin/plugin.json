@@ -1,0 +1,21 @@
+{
+  "name": "jiegou",
+  "description": "Connect Claude Code to JieGou — governed AI workflow automation with approval gates, audit trails, and RBAC. Receive tasks from the JieGou console and send results back via WebSocket.",
+  "version": "1.0.0",
+  "author": {
+    "name": "JieGou",
+    "url": "https://jiegou.ai"
+  },
+  "homepage": "https://jiegou.ai/solutions/openclaw-integration",
+  "repository": "https://github.com/JieGouAI/orion",
+  "license": "MIT",
+  "keywords": [
+    "jiegou",
+    "governance",
+    "workflow",
+    "enterprise",
+    "approval",
+    "audit",
+    "task-dispatch"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jiegou": {
+      "command": "bun",
+      "args": ["src/server.ts"],
+      "env": {
+        "JIEGOU_API_KEY": "",
+        "JIEGOU_ACCOUNT_ID": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "jiegou-plugins",
+  "owner": {
+    "name": "JieGou",
+    "email": "support@jiegou.ai"
+  },
+  "metadata": {
+    "description": "Official JieGou plugins for Claude Code — governed AI workflow automation with approval gates, audit trails, and RBAC.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "jiegou",
+      "source": "./plugins/jiegou-channel",
+      "description": "Connect Claude Code to JieGou for governed task dispatch, approval workflows, and audit trails. Receive tasks from the JieGou console and send results back via WebSocket.",
+      "version": "1.0.0",
+      "author": {
+        "name": "JieGou",
+        "email": "support@jiegou.ai"
+      },
+      "homepage": "https://jiegou.ai/solutions/openclaw-integration",
+      "repository": "https://github.com/JieGouAI/claude-code-plugin",
+      "license": "MIT",
+      "keywords": [
+        "jiegou",
+        "governance",
+        "workflow",
+        "enterprise",
+        "approval",
+        "audit",
+        "task-dispatch",
+        "channel"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jiegou": {
+      "command": "bun",
+      "args": ["./node_modules/@jiegou/claude-code-channel/src/server.ts"],
+      "env": {
+        "JIEGOU_API_KEY": "jgk_your-key-from-settings-developer",
+        "JIEGOU_ACCOUNT_ID": "your-account-id-from-settings-account"
+      }
+    }
+  }
+}
