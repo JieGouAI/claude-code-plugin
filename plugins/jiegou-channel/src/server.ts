@@ -21,6 +21,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { WebSocket } from 'ws';
 import { loadConfig, type ChannelConfig } from './config.js';
+import { apiTools, apiToolNames } from './tools/definitions.js';
+import { execute } from './api.js';
 
 // ─── Logging ────────────────────────────────────────────────────────────────
 // All logs go to stderr so stdout remains clean for MCP stdio transport.
@@ -45,7 +47,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 //   <channel source="jiegou" task_id="..." task_type="..." priority="...">
 
 const mcp = new Server(
-  { name: 'jiegou', version: '0.1.0' },
+  { name: 'jiegou', version: '0.2.0' },
   {
     capabilities: {
       experimental: { 'claude/channel': {} },
@@ -53,7 +55,8 @@ const mcp = new Server(
     },
     instructions: [
       'You are connected to the JieGou AI workflow automation platform.',
-      'Tasks arrive as <channel source="jiegou" task_id="..." task_type="..." priority="...">.',
+      'You can use API tools (prefixed with jiegou_) to list recipes/workflows, run them, search knowledge, get analytics, create schedules, and publish social posts.',
+      'If WebSocket channel mode is enabled, tasks also arrive as <channel source="jiegou" task_id="..." task_type="..." priority="...">.',
       'Execute the task using your local tools and context.',
       'When done, use the jiegou_reply tool to send results back, passing the task_id.',
       'For multi-step tasks, send progress updates with status="in_progress".',
@@ -103,6 +106,7 @@ const TOOLS = [
       required: [],
     },
   },
+  ...apiTools,
 ];
 
 export { TOOLS };
@@ -174,7 +178,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
             {
               connected: wsConnected,
               authenticated: wsAuthenticated,
+              channelEnabled: config.channelEnabled,
               wsUrl: config.wsUrl,
+              baseUrl: config.baseUrl,
               accountId: config.accountId,
             },
             null,
@@ -185,12 +191,36 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     };
   }
 
+  // ─── API tools (prefixed with jiegou_) ──────────────────────────────
+  if (apiToolNames.has(name)) {
+    const strippedName = name.replace(/^jiegou_/, '');
+    try {
+      return (await execute(strippedName, (args || {}) as Record<string, unknown>)) as {
+        content: Array<{ type: 'text'; text: string }>;
+      };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+      };
+    }
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 });
 
 // ─── WebSocket Connection ───────────────────────────────────────────────────
 
 function connectWebSocket(cfg: ChannelConfig): void {
+  if (!cfg.wsUrl) {
+    log('No WebSocket URL configured, skipping connection');
+    return;
+  }
+
   if (ws) {
     cleanupWebSocket();
   }
@@ -362,15 +392,19 @@ function cleanupWebSocket(): void {
 const config = loadConfig();
 
 async function main(): Promise<void> {
-  log('Starting JieGou Claude Code channel server v0.1.0');
+  log('Starting JieGou Claude Code channel server v0.2.0');
 
   // Connect to Claude Code over stdio
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
   log('MCP stdio transport connected');
 
-  // Connect to JieGou WebSocket
-  connectWebSocket(config);
+  // Connect to JieGou WebSocket (only if channel mode is enabled)
+  if (config.channelEnabled) {
+    connectWebSocket(config);
+  } else {
+    log('WebSocket channel mode disabled (set JIEGOU_WS_URL to enable)');
+  }
 
   // Graceful shutdown
   const shutdown = () => {

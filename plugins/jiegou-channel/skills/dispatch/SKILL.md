@@ -1,6 +1,6 @@
 ---
 name: dispatch
-description: Send a task result or progress update back to JieGou. Use when you've completed work from a JieGou task and need to report the outcome.
+description: Send a task result back over the experimental WebSocket channel (jiegou_reply). For substrate work pulled via /jiegou:pull, use /jiegou:report instead — that is the supported dispatch path.
 ---
 
 When the user asks to send results back to JieGou, or when you've completed a task that arrived via the JieGou channel, use the `jiegou_reply` tool to report the outcome.

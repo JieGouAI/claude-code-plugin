@@ -4,16 +4,20 @@ Official [JieGou](https://jiegou.ai) plugins for Claude Code — governed AI wor
 
 ## Available Plugins
 
-### jiegou (Channel)
+### jiegou
 
-Connect your Claude Code session to the JieGou platform. Receive governed tasks from the JieGou console and send results back — with full audit trails, approval gates, and enterprise governance.
+Connect your Claude Code session to the JieGou platform. Enroll your machine as a
+governed **substrate worker**: console-approved work is dispatched to your local
+session, executed at your flat subscription rate, and reported back with per-agent
+audit attribution. Your subscription does the work; the plane makes it governed.
 
 **Features:**
-- Receive tasks from JieGou console as channel events
-- Send results back via the `jiegou_reply` tool
-- Check connection status with `/jiegou:status`
-- WebSocket connection with heartbeat and auto-reconnect
-- HMAC authentication via API key
+- `/jiegou:enroll` — one-time enrollment with a single-use console code (session
+  lives in your OS keychain; no platform credential on the device; revocable)
+- `/jiegou:pull` / `/jiegou:report` — the governed work loop (approve in console →
+  execute locally → audited result back)
+- Run recipes/workflows via key-authed API tools (`/jiegou:run`, `/jiegou:trigger`)
+- Experimental WebSocket channel mode (off by default)
 
 ## Quick Start
 

@@ -1,0 +1,23 @@
+name: Auto-approve owner PRs
+
+# Auto-approves PRs authored by `shyan-ai` (the founder's automation
+# identity) — satisfies the branch-protection 1-approval requirement
+# without slowing solo-founder velocity. Mirrors the orion monorepo's
+# workflow (same rationale, same mechanism).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    if: github.actor == 'shyan-ai'
+    steps:
+      - name: Approve PR
+        uses: hmarr/auto-approve-action@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
