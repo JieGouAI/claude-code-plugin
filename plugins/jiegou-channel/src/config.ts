@@ -1,9 +1,11 @@
 export interface ChannelConfig {
-  wsUrl: string;
+  wsUrl?: string;       // Optional — only for channel mode
+  baseUrl: string;      // API base URL
   apiKey: string;
   accountId: string;
   heartbeatInterval: number;
   reconnectDelay: number;
+  channelEnabled: boolean; // Whether to connect WebSocket
 }
 
 /**
@@ -16,31 +18,33 @@ export interface ChannelConfig {
  *                       Find it at: console.jiegou.ai → Settings → Account
  *
  * Optional:
- *   JIEGOU_WS_URL     — WebSocket URL (default: wss://mcp.jiegou.ai)
+ *   JIEGOU_WS_URL     — WebSocket URL (default: wss://mcp.jiegou.ai).
+ *                        If set, the plugin connects a WebSocket for real-time task dispatch.
+ *   JIEGOU_BASE_URL   — Console API base URL (default: https://console.jiegou.ai)
  */
 export function loadConfig(): ChannelConfig {
   const apiKey = process.env.JIEGOU_API_KEY;
   if (!apiKey) {
     console.error(
-      'Error: JIEGOU_API_KEY is required.\n' +
+      'Warning: JIEGOU_API_KEY is not set.\n' +
         'Get one at: console.jiegou.ai → Settings → Developer → Create Key\n' +
         'The key starts with jgk_',
     );
-    process.exit(1);
   }
   const accountId = process.env.JIEGOU_ACCOUNT_ID;
   if (!accountId) {
     console.error(
-      'Error: JIEGOU_ACCOUNT_ID is required.\n' +
+      'Warning: JIEGOU_ACCOUNT_ID is not set.\n' +
         'Find it at: console.jiegou.ai → Settings → Account',
     );
-    process.exit(1);
   }
   return {
-    wsUrl: process.env.JIEGOU_WS_URL || 'wss://mcp.jiegou.ai',
-    apiKey,
-    accountId,
+    wsUrl: process.env.JIEGOU_WS_URL || undefined,
+    baseUrl: process.env.JIEGOU_BASE_URL || 'https://console.jiegou.ai',
+    apiKey: apiKey || '',
+    accountId: accountId || '',
     heartbeatInterval: 30_000,
     reconnectDelay: 5_000,
+    channelEnabled: !!process.env.JIEGOU_WS_URL,
   };
 }
