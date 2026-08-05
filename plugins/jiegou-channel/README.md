@@ -37,11 +37,24 @@ Then, per session:
 | `/jiegou:pull` | What work has the plane assigned to this seat? |
 | `/jiegou:report` | Report completion/failure back — closes the governed loop |
 | `/jiegou:enroll` | One-time enrollment with a console code |
+| `/jiegou:hooks` | Your content-hook queue — curated post seeds from your intelligence digests |
+| `/jiegou:draft-post` | Draft a LinkedIn post: grounded in your hooks, written to your voice profile, linted, gated in your approval queue — published only by a human |
 
 The loop this serves: a human **approves** an item in the JieGou console → the
 plane dispatches it to this agent → `pull` surfaces it → the session does the
 work → `report` moves it to `executed` with this agent's attribution. Every hop
 is audited.
+
+## Content drafting (the GTM loop)
+
+With your account's voice profile and editorial guide configured (a JieGou
+curation session sets these up), this seat can draft LinkedIn content
+end-to-end governed: `/jiegou:hooks` shows the curated post seeds from your
+weekly intelligence digest; `/jiegou:draft-post` grounds in a seed's cited
+source, drafts in YOUR voice on YOUR subscription, lints against your voice
+profile, and pushes the finished draft into your console approval queue.
+Approval and publishing are always human actions — nothing auto-posts,
+anywhere, ever.
 
 ## API tools (optional, `jgk_` embedded key)
 
