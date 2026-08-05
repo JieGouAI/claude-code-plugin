@@ -39,6 +39,7 @@ Then, per session:
 | `/jiegou:enroll` | One-time enrollment with a console code |
 | `/jiegou:hooks` | Your content-hook queue — curated post seeds from your intelligence digests |
 | `/jiegou:draft-post` | Draft a LinkedIn post: grounded in your hooks, written to your voice profile, linted, gated in your approval queue — published only by a human |
+| `/jiegou:setup-pull` | Optional: schedule unattended pulls (opt-in, inspectable, removable) |
 
 The loop this serves: a human **approves** an item in the JieGou console → the
 plane dispatches it to this agent → `pull` surfaces it → the session does the
@@ -67,13 +68,13 @@ on the plane until the seat **pulls**:
   work greets you at the top of the session. (Silent if the seat isn't
   enrolled.)
 - **On demand:** `/jiegou:pull` any time.
-- **Unattended (optional, off by default):** if you want assignments handled
-  without opening a session, schedule a periodic headless run yourself — e.g.
-  on macOS/Linux, a cron entry such as
-  `*/30 * * * * claude -p "/jiegou:pull — execute any assigned work, then /jiegou:report" >/dev/null 2>&1`.
-  This is a deliberate opt-in on your machine, never something the plugin
-  configures for you. Approvals and publishing remain human actions
-  regardless of how the seat pulls.
+- **Unattended (optional, off by default):** run `/jiegou:setup-pull` — it
+  installs, with your explicit confirmation, a scheduled check (launchd on
+  macOS, cron on Linux) that launches a headless session ONLY when the
+  console has assigned work; idle checks are free. `setup_pull.py status`
+  inspects it, `uninstall` removes it completely. This is always a deliberate
+  opt-in — the plugin never installs persistence on its own. Approvals and
+  publishing remain human actions regardless of how the seat pulls.
 
 Assignments expire after 24 hours if never pulled; the console shows what's
 queued for each seat.
