@@ -56,6 +56,28 @@ profile, and pushes the finished draft into your console approval queue.
 Approval and publishing are always human actions — nothing auto-posts,
 anywhere, ever.
 
+## How work reaches your seat (pull, never push)
+
+The plane never reaches into your machine. Work assigned to this seat —
+approved queue items, or "draft this" commands sent from the console — waits
+on the plane until the seat **pulls**:
+
+- **Automatically at session start:** the plugin installs a SessionStart hook
+  that runs a quiet `pull` whenever you open Claude Code here, so assigned
+  work greets you at the top of the session. (Silent if the seat isn't
+  enrolled.)
+- **On demand:** `/jiegou:pull` any time.
+- **Unattended (optional, off by default):** if you want assignments handled
+  without opening a session, schedule a periodic headless run yourself — e.g.
+  on macOS/Linux, a cron entry such as
+  `*/30 * * * * claude -p "/jiegou:pull — execute any assigned work, then /jiegou:report" >/dev/null 2>&1`.
+  This is a deliberate opt-in on your machine, never something the plugin
+  configures for you. Approvals and publishing remain human actions
+  regardless of how the seat pulls.
+
+Assignments expire after 24 hours if never pulled; the console shows what's
+queued for each seat.
+
 ## API tools (optional, `jgk_` embedded key)
 
 With a JieGou embedded API key configured (`JIEGOU_API_KEY=jgk_…`,
