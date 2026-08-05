@@ -1,0 +1,15 @@
+{
+  "description": "Surface plane-assigned work at every session start (non-blocking; silent when the seat isn't enrolled).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SUBSTRATE_TIMEOUT=10 python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py\" pull --if-enrolled 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

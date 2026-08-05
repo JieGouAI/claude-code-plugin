@@ -342,7 +342,11 @@ def cmd_logout():
     print("substrate: session cleared from this device." if had else "substrate: no session to clear.")
 
 
-def cmd_pull():
+def cmd_pull(argv=None):
+    # --if-enrolled: silent no-op when this seat has no session (used by the
+    # plugin's SessionStart hook so un-enrolled installs stay quiet).
+    if argv and "--if-enrolled" in argv and load_session() is None:
+        return
     out = api("GET", "work")
     cmds, items = out.get("commands", []), out.get("items", [])
     print(f"substrate work for {out['agent']['name']} ({out['agent']['id']}):")
@@ -427,7 +431,7 @@ def main():
     elif cmd == "logout":
         cmd_logout()
     elif cmd == "pull":
-        cmd_pull()
+        cmd_pull(argv[1:])
     elif cmd == "push":
         cmd_push(argv[1:])
     elif cmd == "report":
