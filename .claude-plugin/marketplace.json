@@ -13,7 +13,7 @@
       "name": "jiegou",
       "source": "./plugins/jiegou-channel",
       "description": "Connect Claude Code to JieGou for governed AI operations: enroll this machine as a substrate worker (console-approved work in, audited results back), plus API tools to run recipes and workflows. Your subscription does the work; the plane makes it governed.",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "author": {
         "name": "JieGou",
         "email": "support@jiegou.ai"
