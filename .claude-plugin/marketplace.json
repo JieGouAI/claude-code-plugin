@@ -5,15 +5,15 @@
     "email": "support@jiegou.ai"
   },
   "metadata": {
-    "description": "Official JieGou plugins for Claude Code \u2014 governed AI workflow automation with approval gates, audit trails, and RBAC.",
-    "version": "1.2.0"
+    "description": "Official JieGou plugins for Claude Code — governed AI workflow automation with approval gates, audit trails, and RBAC.",
+    "version": "1.3.0"
   },
   "plugins": [
     {
       "name": "jiegou",
       "source": "./plugins/jiegou-channel",
       "description": "Connect Claude Code to JieGou for governed AI operations: enroll this machine as a substrate worker (console-approved work in, audited results back), plus API tools to run recipes and workflows. Your subscription does the work; the plane makes it governed.",
-      "version": "0.4.2",
+      "version": "0.5.0",
       "author": {
         "name": "JieGou",
         "email": "support@jiegou.ai"
