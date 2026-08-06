@@ -35,15 +35,27 @@ grounding; this seat provides the drafting; the console provides the gate.
    local record.
 
 6. **Register state:**
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py" state '{"externalId":"<date>-<slug>","status":"drafted","title":"<hook first line>","category":"<letter>"[,"hookId":"<id>"]}'`
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py" state '{"externalId":"<date>-<slug>","status":"drafted","title":"<hook first line>","category":"<letter>"[,"hookId":"<id>"][,"scheduledSlot":"<YYYY-MM-DD>"]}'`
    — include `hookId` when drafting from a hook (the plane flips it to
-   drafted in the funnel automatically).
+   drafted in the funnel automatically). If the dispatch command's payload
+   carried a `plannedFor` date, pass it as `scheduledSlot` — that's the
+   operator's target publish slot (a plan; publishing stays human).
 
 7. **Push to the approval queue:**
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"}}]}'`
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","producedBy":"draft-post","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"}}]}'`
+   (`producedBy` attributes the item to this skill in the console's skill
+   scorecard — always include it. If the dispatch carried `plannedFor`,
+   add it to the payload too so the approver sees the planned slot on the
+   card.)
    — the payload must be execution-complete (full text, not a pointer): the
    approver ships from the card. Then `state` again with `"status":"gated"`.
 
-8. **Close with the handoff:** tell the user the draft is in their JieGou
-   approval queue; a human approves there, and publishing to LinkedIn is
+8. **Close with the handoff:** if this seat has calendar-sync enabled
+   (`~/.jiegou/calendar-sync-enabled-<seat>.json` exists), run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/calendar_sync.py" sync` so any
+   newly-approved slots get reminders (mcp mode prints a plan — execute it
+   with the session's calendar tools per /jiegou:calendar-sync, connected
+   calendar first). Then tell the user the draft is in
+   their JieGou approval queue; a human approves there, and publishing to
+   LinkedIn is
    always done by a person. This skill never posts anywhere.

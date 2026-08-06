@@ -57,6 +57,15 @@ profile, and pushes the finished draft into your console approval queue.
 Approval and publishing are always human actions — nothing auto-posts,
 anywhere, ever.
 
+**Publish reminders on YOUR calendar (optional):** `/jiegou:calendar-sync`
+keeps a reminder on your own calendar for every approved post with a planned
+publish slot — created at the slot, moved when the slot changes, removed when
+the post ships or is rejected. It prefers your connected calendar (Google/
+Outlook via this session's calendar tools) and falls back to macOS
+Calendar.app for seats without one. The reminder is bookkeeping: at the
+alarm, YOU open the cockpit card, make any last edits, post by hand, and tap
+Executed. JieGou never holds calendar credentials and never posts for you.
+
 ## How work reaches your seat (pull, never push)
 
 The plane never reaches into your machine. Work assigned to this seat —
