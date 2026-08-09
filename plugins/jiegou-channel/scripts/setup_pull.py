@@ -40,11 +40,22 @@ PLIST_PATH = os.path.expanduser(f"~/Library/LaunchAgents/{PLIST_LABEL}.plist")
 CRON_MARK = f"# jiegou-pull:{SEAT}"
 
 HEADLESS_PROMPT = (
-    "Run /jiegou:pull. For each assigned COMMAND or queue item, execute it by "
-    "following the matching /jiegou skills (e.g. draft-post), then close it with "
-    "/jiegou:report. Do nothing beyond the assigned work. If a step needs "
-    "interactive input or permissions, stop and leave the work unreported for a "
-    "human session. Never publish anything anywhere."
+    "You are running UNATTENDED (scheduled headless pull). Run /jiegou:pull. For "
+    "each assigned COMMAND or queue item, execute it by following the matching "
+    "/jiegou skills (e.g. draft-post), then close it with /jiegou:report. Do "
+    "nothing beyond the assigned work. "
+    "HEADLESS SAFETY (2026-08-08): you may do the mechanical and REVERSIBLE parts "
+    "of a job, but NEVER make a human-judgment call unattended and NEVER do an "
+    "irreversible one. Concretely: do NOT choose which content hooks to queue, do "
+    "NOT approve/execute a cockpit item, do NOT commit to main or publish "
+    "anywhere. For research/content skills (reddit-research, competitive-intel-"
+    "weekly, draft-post): prepare the reversible artifacts (fetch, synthesise, "
+    "write the draft/brief, register the plane receipt, update matrix/state, file "
+    "review-gated requests), then LEAVE the judgment gate for a human by pushing a "
+    "cockpit review-handoff item and reporting the command complete with the "
+    "prepared artifact paths. If any step truly needs interactive input or "
+    "permissions you cannot satisfy this way, stop and leave the work unreported "
+    "for a human session."
 )
 
 
