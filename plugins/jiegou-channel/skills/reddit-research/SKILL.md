@@ -87,6 +87,15 @@ copy under `./jiegou-gtm/research/` is just the operator's convenience.
 vocab). A fenced runId (run already reverted) makes the call fail — STOP and
 report; the operator discarded the run.
 
+## Progress beats (L1)
+
+When this run arrived as a plane COMMAND, keep the customer's cockpit live: at
+each phase boundary (config loaded / grounding read / fetch done / synthesis
+done / brief registered) post
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" progress --command <cmdId> "<what just finished / what's next>" --step K --total N`.
+Best-effort — a failed beat never stops the run, and beats never replace the
+final `/jiegou:report`.
+
 ## Headless / unattended mode
 
 If you are running UNATTENDED (scheduled/dispatched pull, no human to answer

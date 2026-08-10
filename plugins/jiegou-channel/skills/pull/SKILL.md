@@ -21,4 +21,12 @@ this agent's attribution. Work you pull is HUMAN-APPROVED upstream (the
 console's approval gate) — but anything with side effects beyond this machine
 still follows this session's own permission rules.
 
+**Progress-streaming (L1)**: when you begin a COMMAND, mark it picked up —
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" start --command <cmdId>`
+— and at each phase boundary post a beat the customer can watch live in their
+cockpit:
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" progress --command <cmdId> "<what just finished / what's next>" --step K --total N`.
+Progress is best-effort — a failed post never stops the run — and it NEVER
+substitutes for the final `/jiegou:report` (report stays exactly-once).
+
 If the CLI says "not enrolled", route the user to `/jiegou:enroll`.

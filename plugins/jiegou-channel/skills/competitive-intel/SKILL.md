@@ -83,6 +83,15 @@ competitive brief: it does not analyse any internal codebase or product history
 `"runId":"<id>"` in EVERY plane write (artifact, ci-recs, hooks, vocab). A fenced
 runId (run already reverted) fails the call — STOP and report.
 
+## Progress beats (L1)
+
+When this run arrived as a plane COMMAND, keep the customer's cockpit live: at
+each phase boundary (config read / prior briefs grounded / sweep done /
+synthesis done / artifact registered) post
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" progress --command <cmdId> "<what just finished / what's next>" --step K --total N`.
+Best-effort — a failed beat never stops the run, and beats never replace the
+final `/jiegou:report`.
+
 ## Headless / unattended mode
 
 If running UNATTENDED (scheduled/dispatched pull, no human to answer step 7): do

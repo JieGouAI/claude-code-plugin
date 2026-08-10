@@ -11,6 +11,9 @@ makes it governed.
   inspect:  substrate.py whoami                  # identity, account, scopes, expiry
   work:     substrate.py pull                    # what does the plane want from me?
             substrate.py push '<items-json>'     # send drafts/items to the approval queue
+            substrate.py start --command <cmdId>       # mark a command as picked up
+            substrate.py progress --command <cmdId> "phase message" \
+                [--step K --total N]             # mid-run beat (L1 progress-streaming)
             substrate.py report --item <id> [--command <id>] [--note "…"] \
                 [--artifact <path>] [--failed]
   session:  substrate.py refresh                 # force a token rotation (else automatic)
@@ -417,6 +420,67 @@ def _parse_flags(argv):
     return args
 
 
+def _positionals(argv):
+    """Leftover positional args, using _parse_flags's consumption rule
+    (a --flag eats the next non--- token)."""
+    pos = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--"):
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                i += 2
+            else:
+                i += 1
+        else:
+            pos.append(a)
+            i += 1
+    return pos
+
+
+def cmd_start(args):
+    """Mark a command as picked up ("seat started"). Fire-and-forget — a failed
+    ping never stops the run (the first progress beat also acknowledges)."""
+    cmd_id = args.get("--command")
+    if not cmd_id:
+        sys.exit("substrate start: --command <cmdId> required")
+    try:
+        api("PUT", f"commands/{cmd_id}", {"action": "acknowledge"})
+        print(f"substrate: started — command {cmd_id} acknowledged")
+    except (Exception, SystemExit):
+        print("substrate: start ping failed (ignored — run continues)")
+
+
+def cmd_progress(argv):
+    """Post one mid-run progress beat (L1 progress-streaming). NEVER fails the
+    run: progress is best-effort and advisory — it does not replace the
+    exactly-once final report."""
+    args = _parse_flags(argv)
+    pos = _positionals(argv)
+    cmd_id = args.get("--command")
+    msg = pos[0] if pos else args.get("--message")
+    if not cmd_id or not isinstance(msg, str) or not msg.strip():
+        sys.exit(
+            'substrate progress: usage — substrate.py progress --command <cmdId> "message" '
+            "[--step K --total N] [--phase slug]"
+        )
+    body = {"action": "progress", "message": msg.strip()[:500]}
+    if isinstance(args.get("--phase"), str):
+        body["phase"] = args["--phase"][:60]
+    try:
+        if args.get("--step"):
+            body["step"] = int(args["--step"])
+        if args.get("--total"):
+            body["totalSteps"] = int(args["--total"])
+    except (TypeError, ValueError):
+        sys.exit("substrate progress: --step/--total must be integers")
+    try:
+        api("PUT", f"commands/{cmd_id}", body)
+        print(f"substrate: progress — {body['message'][:70]}")
+    except (Exception, SystemExit):
+        print("substrate: progress post failed (ignored — run continues)")
+
+
 def main():
     argv = sys.argv[1:]
     if not argv:
@@ -434,6 +498,10 @@ def main():
         cmd_pull(argv[1:])
     elif cmd == "push":
         cmd_push(argv[1:])
+    elif cmd == "start":
+        cmd_start(_parse_flags(argv[1:]))
+    elif cmd == "progress":
+        cmd_progress(argv[1:])
     elif cmd == "report":
         cmd_report(_parse_flags(argv[1:]))
     else:
