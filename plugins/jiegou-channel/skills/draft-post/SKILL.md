@@ -75,6 +75,12 @@ grounding; this seat provides the drafting; the console provides the gate.
    LinkedIn is
    always done by a person. This skill never posts anywhere.
 
+**Progress beats (L1):** when the draft arrived as a plane COMMAND, post a beat
+at each phase boundary (hook read / draft written / linted / pushed to gate):
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" progress --command <cmdId> "<what just finished>" --step K --total N`.
+Best-effort — a failed beat never stops the run, and beats never replace the
+final `/jiegou:report`.
+
 **Headless note (2026-08-08 — T1):** draft-post is already gate-safe unattended — it drafts one
 post from one hook and pushes it to the cockpit gate (human approves; nothing publishes). The only
 unattended caveat: do NOT commit the local artifact to main from a headless run; the cockpit

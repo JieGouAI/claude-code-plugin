@@ -21,3 +21,7 @@ Rules:
 
 Do not end a session holding pulled work unreported: either report success
 with the artifact, or `--failed` to release it.
+
+Mid-run `progress` beats (L1 progress-streaming) are advisory only — they
+never substitute for this report, and never re-report a finished command
+via progress. Report stays exactly-once.
