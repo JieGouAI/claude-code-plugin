@@ -13,7 +13,7 @@
       "name": "jiegou",
       "source": "./plugins/jiegou-channel",
       "description": "Connect Claude Code to JieGou for governed AI operations: enroll this machine as a substrate worker (console-approved work in, audited results back), plus API tools to run recipes and workflows. Your subscription does the work; the plane makes it governed.",
-      "version": "0.10.2",
+      "version": "0.11.0",
       "author": {
         "name": "JieGou",
         "email": "support@jiegou.ai"
@@ -21,7 +21,7 @@
       "homepage": "https://jiegou.ai/solutions/openclaw-integration",
       "repository": "https://github.com/JieGouAI/claude-code-plugin",
       "license": "MIT",
-      "_version_note": "0.10.2 fixes item-less command close (report --command alone \u2192 PUT commands complete \u2014 first unattended run delivered drafts but could not close its 3 hook-dispatch commands); 0.10.1 hardens unattended pull (2026-08-13 field findings): wrapper concurrency lock (PID file \u2014 the 30-min tick no longer races a long draft session) + headless permission bootstrap at install (seat settings.json allowlist + workspace trust \u2014 without both, headless runs auto-deny every plugin-script call and execute nothing); 0.10.0 adds L1 progress-streaming (substrate.py start/progress verbs + phase-boundary skill instructions \u2014 the cockpit watches runs live); 0.9.0 adds the competitive-intel tenant plugin skill (C4 \u2014 Competitive Pulse framed by the account's own competitor set + lens, git-free plane artifact, KB-grounded, headless-safe) + gtm.py ci-recs; 0.8.0 added gtm.py ci-config (C4 seed); 0.7.0 added reddit-research (R4); 0.6.0 added gtm.py kb-search (pathway 3)",
+      "_version_note": "0.11.0 adds SSE-wake (spec 2026-08-13): substrate.py wake daemon (per-seat doorbell stream, 45s dead-connection detection, backoff reconnect, 10-min heartbeat floor) + setup_pull.py install --wake (launchd KeepAlive instead of interval polling) \u2014 dispatch\u2192draft-start goes from up-to-30-min to ~seconds on an awake seat; 0.10.2 fixes item-less command close (report --command alone \u2192 PUT commands complete \u2014 first unattended run delivered drafts but could not close its 3 hook-dispatch commands); 0.10.1 hardens unattended pull (2026-08-13 field findings): wrapper concurrency lock (PID file \u2014 the 30-min tick no longer races a long draft session) + headless permission bootstrap at install (seat settings.json allowlist + workspace trust \u2014 without both, headless runs auto-deny every plugin-script call and execute nothing); 0.10.0 adds L1 progress-streaming (substrate.py start/progress verbs + phase-boundary skill instructions \u2014 the cockpit watches runs live); 0.9.0 adds the competitive-intel tenant plugin skill (C4 \u2014 Competitive Pulse framed by the account's own competitor set + lens, git-free plane artifact, KB-grounded, headless-safe) + gtm.py ci-recs; 0.8.0 added gtm.py ci-config (C4 seed); 0.7.0 added reddit-research (R4); 0.6.0 added gtm.py kb-search (pathway 3)",
       "keywords": [
         "jiegou",
         "governance",

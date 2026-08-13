@@ -16,6 +16,9 @@ makes it governed.
                 [--step K --total N]             # mid-run beat (L1 progress-streaming)
             substrate.py report [--item <id>] [--command <id>] [--note "…"]  (one of --item/--command required) \
                 [--artifact <path>] [--failed]
+  daemon:   substrate.py wake --on-wake "<cmd>"  # hold the SSE doorbell; run <cmd>
+                                                 # on connect/wake/10-min heartbeat
+                                                 # (installed by setup_pull.py --wake)
   session:  substrate.py refresh                 # force a token rotation (else automatic)
             substrate.py logout                  # forget the session on this device
 
@@ -496,6 +499,109 @@ def cmd_progress(argv):
         print("substrate: progress post failed (ignored — run continues)")
 
 
+# ── SSE-wake daemon (0.11.0 — spec 2026-08-13) ──────────────────────────────
+#
+# `substrate.py wake --on-wake "<command>"` holds the per-seat SSE doorbell
+# (GET /api/hybrid-agents/<id>/wake) and runs <command> — the seat's existing
+# lockfile-guarded pull wrapper — on connect, on every `wake` frame, and on a
+# 10-minute internal heartbeat. The stream is a doorbell, never a delivery
+# truck: frames carry a count, the pull path is unchanged and authoritative.
+#
+# Resilience: 45s socket read timeout (3 missed server keepalives) detects
+# dead connections (slept laptop); capped exponential backoff on reconnect
+# (1s→30s, reset after a healthy connect); server `event: bye` (~50 min
+# lifetime recycle) reconnects immediately; 401 forces a session refresh.
+# The heartbeat floor means total SSE failure degrades to slow-but-correct.
+
+WAKE_READ_TIMEOUT = 45  # 3 missed 15s server keepalives = dead connection
+WAKE_HEARTBEAT = 600  # safety-net pull cadence while connected
+WAKE_BACKOFF_MAX = 30
+
+
+def _wake_log(msg):
+    line = f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} wake: {msg}"
+    print(line, flush=True)
+
+
+def _run_on_wake(command):
+    try:
+        subprocess.run(["/bin/bash", "-c", command], check=False)
+    except Exception as e:  # never let the pull body kill the daemon
+        _wake_log(f"on-wake failed: {e}")
+
+
+def cmd_wake(args):
+    on_wake = args.get("--on-wake")
+    if not on_wake:
+        sys.exit('substrate wake: --on-wake "<command>" required (the seat pull wrapper)')
+    backoff = 1
+    last_run = 0.0
+
+    def run_now(reason):
+        nonlocal last_run
+        _wake_log(f"pull ({reason})")
+        _run_on_wake(on_wake)
+        last_run = time.time()
+
+    while True:
+        sess = _session_bearer()
+        if not sess:
+            _wake_log("not enrolled — retrying in 60s")
+            time.sleep(60)
+            continue
+        token, agent_id, base = sess
+        req = urllib.request.Request(
+            f"{base}/api/hybrid-agents/{agent_id}/wake",
+            headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=WAKE_READ_TIMEOUT) as resp:
+                _wake_log(f"connected ({resp.getcode()})")
+                backoff = 1
+                # Belt-and-suspenders catch-up: server emits-on-connect too,
+                # but a client-side pull on every (re)connect closes any gap.
+                run_now("connect")
+                event = None
+                while True:
+                    if time.time() - last_run > WAKE_HEARTBEAT:
+                        run_now("heartbeat")
+                    raw = resp.readline()  # blocks ≤ WAKE_READ_TIMEOUT
+                    if not raw:
+                        _wake_log("stream ended")
+                        break
+                    line = raw.decode("utf-8", "replace").strip()
+                    if line.startswith("event:"):
+                        event = line.split(":", 1)[1].strip()
+                    elif line == "" and event:
+                        if event == "wake":
+                            run_now("wake")
+                        elif event == "bye":
+                            _wake_log("server recycle (bye)")
+                            event = None
+                            break
+                        event = None
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                _wake_log("401 — refreshing session")
+                s = load_session(force=True)
+                if s:
+                    try:
+                        _do_refresh(s)
+                    except SystemExit:
+                        pass
+            else:
+                _wake_log(f"http {e.code}")
+        except (urllib.error.URLError, socket.timeout, OSError) as e:
+            # Read timeout here means no keepalive for 45s — dead connection
+            # (slept laptop, dropped proxy). Heartbeat semantics survive via
+            # the immediate run-on-reconnect above.
+            _wake_log(f"disconnected: {getattr(e, 'reason', e)}")
+        except Exception as e:
+            _wake_log(f"unexpected: {e}")
+        time.sleep(backoff)
+        backoff = min(backoff * 2, WAKE_BACKOFF_MAX)
+
+
 def main():
     argv = sys.argv[1:]
     if not argv:
@@ -519,6 +625,8 @@ def main():
         cmd_progress(argv[1:])
     elif cmd == "report":
         cmd_report(_parse_flags(argv[1:]))
+    elif cmd == "wake":
+        cmd_wake(_parse_flags(argv[1:]))
     else:
         sys.exit(f"substrate: unknown command '{cmd}'\n\n{__doc__.strip()}")
 
