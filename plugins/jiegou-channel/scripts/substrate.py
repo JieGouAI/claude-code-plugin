@@ -14,7 +14,7 @@ makes it governed.
             substrate.py start --command <cmdId>       # mark a command as picked up
             substrate.py progress --command <cmdId> "phase message" \
                 [--step K --total N]             # mid-run beat (L1 progress-streaming)
-            substrate.py report --item <id> [--command <id>] [--note "…"] \
+            substrate.py report [--item <id>] [--command <id>] [--note "…"]  (one of --item/--command required) \
                 [--artifact <path>] [--failed]
   session:  substrate.py refresh                 # force a token rotation (else automatic)
             substrate.py logout                  # forget the session on this device
@@ -366,7 +366,7 @@ def cmd_pull(argv=None):
             print(f"          ↳ {str(msg)[:100]}")
     print(
         f"\n{len(cmds)} command(s), {len(items)} item(s). "
-        "Complete with: substrate.py report --item <itemId> [--command <cmdId>]"
+        "Complete with: substrate.py report --item <itemId> [--command <cmdId>] (item=None -> report --command <cmdId> alone)"
     )
 
 
@@ -389,15 +389,30 @@ def cmd_push(argv):
 
 
 def cmd_report(args):
-    item = args.get("--item") or sys.exit("substrate report: --item <itemId> required")
+    item = args.get("--item")
+    cmd = args.get("--command")
+    if not item and not cmd:
+        sys.exit("substrate report: --item <itemId> (or --command <cmdId> for an item-less command) required")
     result = {}
     if args.get("--note"):
         result["note"] = args["--note"]
     if args.get("--artifact"):
         result["artifactFile"] = args["--artifact"]
+    if not item:
+        # Item-less plane command (pull showed item=None — e.g. a hook dispatch whose
+        # deliverable is a gated draft, pushed separately): complete it directly.
+        # 0.10.2 fix — before this, item-less commands had NO close path from the seat
+        # (first unattended run delivered its drafts, then left 3 commands dangling).
+        api("PUT", f"commands/{cmd}", {
+            "action": "complete",
+            "success": "--failed" not in args,
+            "result": result,
+        })
+        print(f"substrate: reported {'FAILURE' if '--failed' in args else 'completion'} — command {cmd} closed (no item)")
+        return
     body = {"itemId": item, "success": "--failed" not in args, "result": result}
-    if args.get("--command"):
-        body["commandId"] = args["--command"]
+    if cmd:
+        body["commandId"] = cmd
     out = api("POST", "report", body)
     state = (out.get("item") or {}).get("state")
     print(f"substrate: reported {'FAILURE' if '--failed' in args else 'completion'} — item state: {state}")
