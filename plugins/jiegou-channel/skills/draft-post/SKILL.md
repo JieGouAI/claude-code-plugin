@@ -47,7 +47,11 @@ grounding; this seat provides the drafting; the console provides the gate.
 6. **Register state:**
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py" state '{"externalId":"<date>-<slug>","status":"drafted","title":"<hook first line>","category":"<letter>"[,"hookId":"<id>"][,"scheduledSlot":"<YYYY-MM-DD>"]}'`
    — include `hookId` when drafting from a hook (the plane flips it to
-   drafted in the funnel automatically). If the dispatch command's payload
+   drafted in the funnel automatically). ⚠ **Adopt the returned externalId**:
+   if the output shows an ADOPT warning, the plane deduped your slug onto an
+   existing post for this hook (a prior session already drafted it) — use the
+   canonical externalId it printed for step 7's push and the gated state
+   call, NEVER your own slug (two ids = two cards at the gate for one hook). If the dispatch command's payload
    carried a `plannedFor` date, pass it as `scheduledSlot` — that's the
    operator's target publish slot (a plan; publishing stays human). If the
    payload carried a `runId` (a DRY run), include `"runId":"<id>"` in this
@@ -80,6 +84,15 @@ at each phase boundary (hook read / draft written / linted / pushed to gate):
 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" progress --command <cmdId> "<what just finished>" --step K --total N`.
 Best-effort — a failed beat never stops the run, and beats never replace the
 final `/jiegou:report`.
+
+**⚠ ALWAYS close the command (0.11.1):** every pulled COMMAND must be closed
+before the session ends —
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" report --command <cmdId> --note "<what shipped>"`
+(works item-less since 0.10.2 — no `--item` needed for hook dispatches). An
+unclosed command is NOT done in the plane's eyes: it gets re-dispatched and
+re-drafted by the next session (the 2026-08-13 duplicate-DSO incident). If the
+draft genuinely failed, close with `--failed` instead — a truthful failure
+beats a dangling command.
 
 **Headless note (2026-08-08 — T1):** draft-post is already gate-safe unattended — it drafts one
 post from one hook and pushes it to the cockpit gate (human approves; nothing publishes). The only
