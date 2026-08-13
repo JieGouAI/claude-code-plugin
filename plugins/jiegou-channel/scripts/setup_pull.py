@@ -11,6 +11,11 @@ persistence on its own. What gets installed, transparently:
        subscription usage.
   2. A per-user schedule: macOS → launchd agent ~/Library/LaunchAgents/
      ai.jiegou.pull.<seat>.plist; Linux → a marked crontab line.
+  3. (0.10.1) Headless permission bootstrap: writes <seat>/.claude/settings.json
+     (Bash allowlist for the plugin scripts + WebFetch/WebSearch + ~/.jiegou) if
+     absent, and marks the seat workspace trusted in ~/.claude.json — without
+     both, every headless run auto-denies the first substrate.py call and no
+     work executes. Existing settings.json is never modified.
 
   setup_pull.py install [--interval 30]   # minutes between checks (default 30)
   setup_pull.py status
@@ -62,12 +67,24 @@ HEADLESS_PROMPT = (
 def write_wrapper(claude_path: str) -> None:
     os.makedirs(BIN_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
+    os.makedirs(os.path.expanduser("~/.jiegou/locks"), exist_ok=True)
     log = os.path.join(LOG_DIR, f"pull-{SEAT}.log")
+    lock = os.path.expanduser(f"~/.jiegou/locks/pull-{SEAT}.pid")
     script = f"""#!/bin/bash
 # jiegou unattended pull — seat "{SEAT}" (installed by /jiegou:setup-pull; remove with `setup_pull.py uninstall`)
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export JIEGOU_AGENT_NAME="{SEAT}"
 cd "{WORKDIR}" || exit 0
+# Concurrency guard (0.10.1): a draft session can outlast the pull interval — without
+# this, the next tick launches a SECOND session racing the same commands (observed
+# 2026-08-13). PID lockfile; a dead PID (crash) never wedges the seat.
+LOCK="{lock}"
+if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+  echo "$(date -u +%FT%TZ) skip: prior work session still running (pid $(cat "$LOCK"))" >> "{log}"
+  exit 0
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
 CHECK=$(SUBSTRATE_TIMEOUT=15 python3 "{HERE}/substrate.py" pull --if-enrolled 2>/dev/null)
 echo "$(date -u +%FT%TZ) check: $(echo "$CHECK" | grep -c 'COMMAND\\|ITEM') item(s)" >> "{log}"
 if echo "$CHECK" | grep -q "COMMAND\\|ITEM"; then
@@ -82,12 +99,65 @@ fi
         os.close(fd)
 
 
+# Headless permission bootstrap (0.10.1). Observed 2026-08-13: a seat with no
+# .claude/settings.json has NO Bash allowlist, so every plugin-script call in a
+# `claude -p` run is auto-denied ("This command requires approval") — and even
+# with settings present, an untrusted workspace IGNORES them. Both must hold or
+# every scheduled run walls at the first substrate.py call.
+SEAT_SETTINGS = {
+    "permissions": {
+        "allow": [
+            # Command-level prefixes on purpose: sessions quote script paths
+            # (python3 "/Users/…/substrate.py"), which defeats path-prefix rules.
+            "Bash(python3:*)",
+            "Bash(python3.14:*)",
+            "Bash(SUBSTRATE_TIMEOUT=15 python3:*)",
+            "WebFetch",
+            "WebSearch",
+        ],
+        "additionalDirectories": ["~/.jiegou"],
+    }
+}
+
+
+def bootstrap_headless_permissions() -> None:
+    import json
+
+    settings_dir = os.path.join(WORKDIR, ".claude")
+    settings_path = os.path.join(settings_dir, "settings.json")
+    if os.path.exists(settings_path):
+        print(f"setup_pull: {settings_path} already exists — left untouched; verify it "
+              f"allowlists the plugin scripts (e.g. \"Bash(python3:*)\") or headless runs will block.")
+    else:
+        os.makedirs(settings_dir, exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump(SEAT_SETTINGS, f, indent=2)
+            f.write("\n")
+        print(f"setup_pull: wrote headless permission allowlist → {settings_path}")
+
+    # Trust: untrusted workspaces silently ignore settings.json permissions.
+    claude_json = os.path.expanduser("~/.claude.json")
+    try:
+        with open(claude_json) as f:
+            cfg = json.load(f)
+        proj = cfg.setdefault("projects", {}).setdefault(WORKDIR, {})
+        if not proj.get("hasTrustDialogAccepted"):
+            proj["hasTrustDialogAccepted"] = True
+            with open(claude_json, "w") as f:
+                json.dump(cfg, f, indent=2)
+            print(f"setup_pull: marked workspace trusted in ~/.claude.json (settings.json is honored in headless runs)")
+    except (OSError, ValueError) as e:
+        print(f"setup_pull: WARNING — could not set workspace trust in ~/.claude.json ({e}); "
+              f"run claude interactively here once and accept the trust dialog, or headless runs will ignore the allowlist.")
+
+
 def install(interval_min: int) -> None:
     claude_path = shutil.which("claude")
     if not claude_path:
         sys.exit("setup_pull: `claude` CLI not found on PATH — install Claude Code first.")
     if substrate.load_session() is None:
         sys.exit("setup_pull: this seat isn't enrolled — run /jiegou:enroll first.")
+    bootstrap_headless_permissions()
     write_wrapper(claude_path)
     if sys.platform == "darwin":
         os.makedirs(os.path.dirname(PLIST_PATH), exist_ok=True)
