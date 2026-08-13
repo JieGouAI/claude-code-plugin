@@ -1,7 +1,7 @@
 {
   "name": "jiegou",
   "description": "Connect Claude Code to JieGou \u2014 governed AI operations. Enroll this machine as a substrate worker (console-approved work in, audited results back) and draft LinkedIn content through the governed loop: grounded in your account's curated hooks, written to your voice profile, linted, and gated in your approval queue. Your subscription does the work; the plane makes it governed.",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "author": {
     "name": "JieGou",
     "url": "https://jiegou.ai"

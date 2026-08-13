@@ -18,6 +18,10 @@ persistence on its own. What gets installed, transparently:
      work executes. Existing settings.json is never modified.
 
   setup_pull.py install [--interval 30]   # minutes between checks (default 30)
+  setup_pull.py install --wake            # 0.11.0: SSE-wake daemon instead of polling —
+                                          # a launchd KeepAlive process holds the per-seat
+                                          # wake stream (substrate.py wake) and pulls within
+                                          # ~2s of dispatch; 10-min internal heartbeat floor
   setup_pull.py status
   setup_pull.py uninstall
 
@@ -151,7 +155,7 @@ def bootstrap_headless_permissions() -> None:
               f"run claude interactively here once and accept the trust dialog, or headless runs will ignore the allowlist.")
 
 
-def install(interval_min: int) -> None:
+def install(interval_min: int, wake: bool = False) -> None:
     claude_path = shutil.which("claude")
     if not claude_path:
         sys.exit("setup_pull: `claude` CLI not found on PATH — install Claude Code first.")
@@ -159,19 +163,44 @@ def install(interval_min: int) -> None:
         sys.exit("setup_pull: this seat isn't enrolled — run /jiegou:enroll first.")
     bootstrap_headless_permissions()
     write_wrapper(claude_path)
+    if wake and sys.platform != "darwin":
+        sys.exit("setup_pull: --wake needs launchd KeepAlive (macOS); use interval polling on Linux for now.")
     if sys.platform == "darwin":
         os.makedirs(os.path.dirname(PLIST_PATH), exist_ok=True)
-        plist = {
-            "Label": PLIST_LABEL,
-            "ProgramArguments": ["/bin/bash", WRAPPER],
-            "StartInterval": interval_min * 60,
-            "RunAtLoad": True,
-        }
+        log = os.path.join(LOG_DIR, f"pull-{SEAT}.log")
+        if wake:
+            # SSE-wake daemon (0.11.0): launchd supervises a persistent
+            # `substrate.py wake` process holding the per-seat doorbell stream;
+            # it runs the SAME wrapper (check → lockfile → headless draft) on
+            # connect, on every wake frame, and on a 10-min heartbeat floor.
+            plist = {
+                "Label": PLIST_LABEL,
+                "ProgramArguments": [
+                    sys.executable or "python3",
+                    os.path.join(HERE, "substrate.py"),
+                    "wake",
+                    "--on-wake",
+                    f"/bin/bash {WRAPPER}",
+                ],
+                "EnvironmentVariables": {"JIEGOU_AGENT_NAME": SEAT},
+                "KeepAlive": True,
+                "RunAtLoad": True,
+                "StandardOutPath": log,
+                "StandardErrorPath": log,
+            }
+        else:
+            plist = {
+                "Label": PLIST_LABEL,
+                "ProgramArguments": ["/bin/bash", WRAPPER],
+                "StartInterval": interval_min * 60,
+                "RunAtLoad": True,
+            }
         with open(PLIST_PATH, "wb") as f:
             plistlib.dump(plist, f)
         subprocess.run(["launchctl", "unload", PLIST_PATH], capture_output=True)
         subprocess.run(["launchctl", "load", PLIST_PATH], check=True, capture_output=True)
-        print(f"setup_pull: installed launchd agent {PLIST_LABEL} (every {interval_min} min).")
+        mode = "SSE-wake daemon (KeepAlive)" if wake else f"every {interval_min} min"
+        print(f"setup_pull: installed launchd agent {PLIST_LABEL} ({mode}).")
     else:
         r = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         lines = [l for l in (r.stdout.splitlines() if r.returncode == 0 else []) if CRON_MARK not in l]
@@ -224,7 +253,7 @@ def main() -> None:
         interval = 30
         if "--interval" in argv:
             interval = max(5, int(argv[argv.index("--interval") + 1]))
-        install(interval)
+        install(interval, wake="--wake" in argv)
     elif argv[0] == "status":
         status()
     elif argv[0] == "uninstall":
