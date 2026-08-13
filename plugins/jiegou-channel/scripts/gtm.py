@@ -128,8 +128,16 @@ def cmd_state(argv):
     if status >= 400 or not data.get("success"):
         sys.exit(f"gtm state: HTTP {status} — {data.get('error', '?')}")
     post = data.get("post", {})
-    print(f"gtm state: {post.get('externalId')} → {post.get('status')}"
+    canonical = post.get("externalId")
+    print(f"gtm state: {canonical} → {post.get('status')}"
           + (" (hook flipped to drafted)" if payload.get("hookId") and payload.get("status") == "drafted" else ""))
+    if canonical and payload.get("externalId") and canonical != payload["externalId"]:
+        # Hook dedupe (0.11.1): this hook already has a live post under another
+        # slug — the plane redirected the write to it. The caller MUST adopt
+        # the canonical id for the approval-queue push and later state calls,
+        # or the gate shows two cards for one hook.
+        print(f"gtm state: ⚠ ADOPT canonical externalId '{canonical}' (your '{payload['externalId']}' "
+              f"was deduped onto an existing post for this hook) — use it for push + gated state")
 
 
 def cmd_kb_search(argv):
