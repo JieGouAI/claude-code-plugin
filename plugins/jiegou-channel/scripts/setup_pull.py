@@ -65,16 +65,31 @@ HEADLESS_PROMPT = (
     "cockpit review-handoff item and reporting the command complete with the "
     "prepared artifact paths. If any step truly needs interactive input or "
     "permissions you cannot satisfy this way, stop and leave the work unreported "
-    "for a human session."
+    "for a human session. "
+    "SCOPE (2026-08-16): act ONLY on work this pull listed for THIS seat. Do not "
+    "run a job because it looks due, and do not act on a command id you learned "
+    "anywhere other than this pull's output. If closing a command returns 403 "
+    "'Command belongs to another agent', that is the plane refusing another seat's "
+    "work — stop, report nothing, and do not record it as a platform bug."
 )
 
 
+# Repetition budget (0.13.1): how many headless sessions may be spent on the
+# SAME unchanged pulled work before the wrapper holds off, and how long it holds.
+MAX_SAME_WORK_SESSIONS = 3
+SAME_WORK_COOLDOWN_S = 6 * 3600
+
+
 def write_wrapper(claude_path: str) -> None:
+    max_attempts = MAX_SAME_WORK_SESSIONS
+    cooldown_s = SAME_WORK_COOLDOWN_S
+    cooldown_h = SAME_WORK_COOLDOWN_S // 3600
     os.makedirs(BIN_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(os.path.expanduser("~/.jiegou/locks"), exist_ok=True)
     log = os.path.join(LOG_DIR, f"pull-{SEAT}.log")
     lock = os.path.expanduser(f"~/.jiegou/locks/pull-{SEAT}.pid")
+    state = os.path.expanduser(f"~/.jiegou/locks/pull-{SEAT}.attempts")
     script = f"""#!/bin/bash
 # jiegou unattended pull — seat "{SEAT}" (installed by /jiegou:setup-pull; remove with `setup_pull.py uninstall`)
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -93,8 +108,35 @@ trap 'rm -f "$LOCK"' EXIT
 CHECK=$(SUBSTRATE_TIMEOUT=15 python3 "{HERE}/substrate.py" pull --if-enrolled 2>/dev/null)
 echo "$(date -u +%FT%TZ) check: $(echo "$CHECK" | grep -c 'COMMAND\\|ITEM') item(s)" >> "{log}"
 if echo "$CHECK" | grep -q "COMMAND\\|ITEM"; then
-  echo "$(date -u +%FT%TZ) work found — launching headless session" >> "{log}"
+  # Repetition budget (0.13.1): the PID lock above stops CONCURRENT sessions but
+  # nothing stopped SEQUENTIAL ones — a work item that cannot be closed from this
+  # seat reappears on every tick, and each tick spent a full headless session
+  # reaching the same conclusion (observed 2026-08-15: ~12 sessions in 35 minutes
+  # on one command, zero state change). Fingerprint the pulled ids; after
+  # {max_attempts} sessions leave the SAME work unchanged, hold for {cooldown_h}h or until the
+  # work actually changes. The seat stays live for genuinely new work throughout.
+  FP=$(echo "$CHECK" | grep -oE '(COMMAND|ITEM)[[:space:]]+[A-Za-z0-9_-]+' \\
+       | awk '{{print $2}}' | sort | tr '\\n' ',')
+  STATE="{state}"
+  NOW=$(date +%s)
+  PREV_FP=""; PREV_N=0; PREV_T=0
+  if [ -f "$STATE" ]; then IFS=$'\\t' read -r PREV_FP PREV_N PREV_T < "$STATE" || true; fi
+  if [ "$FP" = "$PREV_FP" ]; then
+    N=$((PREV_N + 1)); T=$PREV_T
+    if [ "$N" -gt {max_attempts} ] && [ $((NOW - PREV_T)) -lt {cooldown_s} ]; then
+      printf '%s\\t%s\\t%s\\n' "$FP" "$N" "$T" > "$STATE"
+      echo "$(date -u +%FT%TZ) budget: same work after {max_attempts} sessions, no change — holding (attempt $N, next in $(( ({cooldown_s} - (NOW - PREV_T)) / 60 ))m). fp=$FP" >> "{log}"
+      exit 0
+    fi
+    if [ "$N" -gt {max_attempts} ]; then N=1; T=$NOW; fi
+  else
+    N=1; T=$NOW
+  fi
+  printf '%s\\t%s\\t%s\\n' "$FP" "$N" "$T" > "$STATE"
+  echo "$(date -u +%FT%TZ) work found — launching headless session (attempt $N)" >> "{log}"
   "{claude_path}" -p {HEADLESS_PROMPT!r} >> "{log}" 2>&1
+else
+  rm -f "{state}"
 fi
 """
     fd = os.open(WRAPPER, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o755)
