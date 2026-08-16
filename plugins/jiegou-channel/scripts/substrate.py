@@ -557,33 +557,24 @@ def cmd_asset(args):
         sys.exit("substrate: not enrolled on this device.")
     token, agent_id, base = sess
 
-    # Minimal multipart/form-data — no third-party deps in this CLI, by design.
-    boundary = "----jiegou" + base64.urlsafe_b64encode(os.urandom(9)).decode()
-    parts = []
-    def _field(name, value):
-        parts.append(
-            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
-        )
-    _field("kind", kind)
-    if external_id:
-        _field("externalId", external_id)
+    # JSON + base64, NOT multipart: SvelteKit's CSRF guard rejects form
+    # content-types without a matching Origin, and sending a fake Origin to
+    # get around a protection is the wrong fix for a non-browser client.
     with open(path, "rb") as f:
         blob = f.read()
-    parts.append(
-        (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
-         f'filename="{os.path.basename(path)}"\r\nContent-Type: {ctype}\r\n\r\n').encode()
-    )
-    parts.append(blob)
-    parts.append(f"\r\n--{boundary}--\r\n".encode())
-    body = b"".join(parts)
+    payload = {
+        "kind": kind,
+        "contentType": ctype,
+        "dataBase64": base64.b64encode(blob).decode("ascii"),
+    }
+    if external_id:
+        payload["externalId"] = external_id
+    body = json.dumps(payload).encode()
 
     req = urllib.request.Request(
         f"{base}/api/hybrid-agents/{agent_id}/assets",
         data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         method="POST",
     )
     try:
