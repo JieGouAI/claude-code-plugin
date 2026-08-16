@@ -19,6 +19,8 @@ makes it governed.
   daemon:   substrate.py wake --on-wake "<cmd>"  # hold the SSE doorbell; run <cmd>
                                                  # on connect/wake/10-min heartbeat
                                                  # (installed by setup_pull.py --wake)
+  assets:   substrate.py asset --file <img.png> [--kind li-cover] [--external-id <slug>]
+                                                 # upload bytes; prints the console URL
   session:  substrate.py refresh                 # force a token rotation (else automatic)
             substrate.py logout                  # forget the session on this device
 
@@ -530,6 +532,75 @@ def _run_on_wake(command):
         _wake_log(f"on-wake failed: {e}")
 
 
+def cmd_asset(args):
+    """Upload a locally-rendered image to the plane and print its console URL.
+
+    The seat never holds a cloud credential: it posts BYTES to
+    /api/hybrid-agents/<id>/assets with its own bearer, and the plane does the
+    storage write. The printed url is what belongs on a cockpit card — a path
+    into this seat's filesystem is meaningless to the console (2026-08-10: two
+    cards referenced cover PNGs that were never rendered, and the UI showed the
+    path as text, so nobody could tell).
+    """
+    path = args.get("--file")
+    if not path or not os.path.exists(path):
+        sys.exit("substrate asset: --file <path> required (and must exist)")
+    kind = args.get("--kind") or "asset"
+    external_id = args.get("--external-id")
+    ext = os.path.splitext(path)[1].lower()
+    ctype = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(ext)
+    if not ctype:
+        sys.exit(f"substrate asset: unsupported file type '{ext}' (png/jpg only)")
+
+    sess = _session_bearer()
+    if not sess:
+        sys.exit("substrate: not enrolled on this device.")
+    token, agent_id, base = sess
+
+    # Minimal multipart/form-data — no third-party deps in this CLI, by design.
+    boundary = "----jiegou" + base64.urlsafe_b64encode(os.urandom(9)).decode()
+    parts = []
+    def _field(name, value):
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
+        )
+    _field("kind", kind)
+    if external_id:
+        _field("externalId", external_id)
+    with open(path, "rb") as f:
+        blob = f.read()
+    parts.append(
+        (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
+         f'filename="{os.path.basename(path)}"\r\nContent-Type: {ctype}\r\n\r\n').encode()
+    )
+    parts.append(blob)
+    parts.append(f"\r\n--{boundary}--\r\n".encode())
+    body = b"".join(parts)
+
+    req = urllib.request.Request(
+        f"{base}/api/hybrid-agents/{agent_id}/assets",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=float(os.environ.get("SUBSTRATE_TIMEOUT", "60"))) as resp:
+            out = json.load(resp)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read().decode()).get("error", "")
+        except Exception:
+            detail = ""
+        sys.exit(f"substrate asset: upload failed ({e.code}) {detail}")
+    except urllib.error.URLError as e:
+        sys.exit(f"substrate asset: cannot reach the plane — {e.reason}")
+    print(f"substrate asset: uploaded {out.get('bytes')}b -> {out.get('url')}")
+    print(out.get("url", ""))
+
+
 def cmd_wake(args):
     on_wake = args.get("--on-wake")
     if not on_wake:
@@ -625,6 +696,8 @@ def main():
         cmd_progress(argv[1:])
     elif cmd == "report":
         cmd_report(_parse_flags(argv[1:]))
+    elif cmd == "asset":
+        cmd_asset(_parse_flags(argv[1:]))
     elif cmd == "wake":
         cmd_wake(_parse_flags(argv[1:]))
     else:
