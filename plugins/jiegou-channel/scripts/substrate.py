@@ -31,8 +31,12 @@ token (~90d) stored in the OS keychain (macOS Security / libsecret; 0600 file
 fallback). No platform credential ever lands on this device, and an admin can
 revoke the seat from the console at any time.
 
-Config (all optional): JIEGOU_CONSOLE_URL (default https://console.jiegou.ai),
-JIEGOU_AGENT_NAME (default: current directory name), SUBSTRATE_TIMEOUT (s).
+Config: JIEGOU_CONSOLE_URL (optional, default https://console.jiegou.ai),
+SUBSTRATE_TIMEOUT (optional, seconds), and JIEGOU_AGENT_NAME — which seat this
+process is. JIEGOU_AGENT_NAME is optional only while this device has zero or one
+enrolled seat; with several, it is REQUIRED and identity is never guessed from
+the current directory (a cd into another seat's tree must not become a login as
+that seat).
 Requires Python 3.9+ (macOS/Linux; Windows via WSL).
 """
 
@@ -53,8 +57,80 @@ _SESSION = None
 _SESSION_LOADED = False
 
 
+_KNOWN_SEATS = None
+
+
+def _known_seats():
+    """Seat names that already hold a stored session on this device."""
+    global _KNOWN_SEATS
+    if _KNOWN_SEATS is not None:
+        return _KNOWN_SEATS
+    names = set()
+    try:
+        d = os.path.expanduser("~/.jiegou")
+        prefix, suffix = "substrate-session-", ".json"
+        for f in os.listdir(d):
+            if f.startswith(prefix) and f.endswith(suffix):
+                names.add(f[len(prefix) : -len(suffix)])
+    except OSError:
+        pass
+    if sys.platform == "darwin" and shutil.which("security"):
+        # `security` has no "list all matching a service", so read the dump and
+        # keep only blocks belonging to OUR service. Attribute dump only — this
+        # never touches secret data, so it never prompts.
+        try:
+            r = subprocess.run(
+                ["security", "dump-keychain"], capture_output=True, text=True, timeout=20
+            )
+            if r.returncode == 0:
+                for block in r.stdout.split("\nkeychain: "):
+                    if f'"svce"<blob>="{KEYCHAIN_SERVICE}"' not in block:
+                        continue
+                    for line in block.splitlines():
+                        if '"acct"' in line and "session:" in line:
+                            names.add(line.split("session:", 1)[1].rstrip('"').strip())
+        except (OSError, subprocess.SubprocessError):
+            pass
+    _KNOWN_SEATS = sorted(n for n in names if n)
+    return _KNOWN_SEATS
+
+
 def _seat_name():
-    return os.environ.get("JIEGOU_AGENT_NAME") or os.path.basename(os.getcwd())
+    """Which seat am I? Answered by the environment — never by the filesystem.
+
+    This used to be `JIEGOU_AGENT_NAME or basename(getcwd())`, which made seat
+    identity AMBIENT on any machine running more than one seat: a process whose
+    cwd wandered into another seat's tree — reading a skill file, say — silently
+    authenticated as THAT seat. It would then pull the other seat's commands,
+    execute work it was never dispatched, and fail to close it with a correct
+    403 that reads exactly like a plane bug.
+
+    Diagnosed 2026-08-15: one feed sweep run twice by two seats 8 minutes apart
+    (two conflicting receipts), ~12 headless sessions spent re-litigating a
+    command that belonged to a different seat, and a false "PLANE BUG" finding
+    written into seat memory. The cd was the whole cause.
+
+    So: explicit env wins; a single enrolled seat is unambiguous and still
+    works; anything else fails closed rather than guessing.
+    """
+    explicit = (os.environ.get("JIEGOU_AGENT_NAME") or "").strip()
+    if explicit:
+        return explicit
+    seats = _known_seats()
+    if len(seats) == 1:
+        return seats[0]
+    if not seats:
+        # Pre-enrollment: no stored session to be ambiguous with, and
+        # `login --enroll` has to store under some name. Historical default.
+        return os.path.basename(os.getcwd())
+    sys.exit(
+        f"substrate: {len(seats)} seats are enrolled on this device "
+        f"({', '.join(seats)}) and JIEGOU_AGENT_NAME is not set.\n"
+        "  Seat identity is never inferred from the current directory: a cd into "
+        "another seat's tree would authenticate as that seat, pull its work, and "
+        "run it.\n"
+        f"  Set it explicitly, e.g.:  JIEGOU_AGENT_NAME={seats[0]} substrate.py pull"
+    )
 
 
 def _console_base():
@@ -352,9 +428,21 @@ def cmd_logout():
 
 def cmd_pull(argv=None):
     # --if-enrolled: silent no-op when this seat has no session (used by the
-    # plugin's SessionStart hook so un-enrolled installs stay quiet).
-    if argv and "--if-enrolled" in argv and load_session() is None:
-        return
+    # plugin's SessionStart hook so un-enrolled installs stay quiet). On a
+    # multi-seat device with no JIEGOU_AGENT_NAME, _seat_name() fails closed —
+    # on the HOOK path that must be one quiet line, not a hard error every time
+    # a session starts anywhere on the machine.
+    if argv and "--if-enrolled" in argv:
+        try:
+            if load_session() is None:
+                return
+        except SystemExit:
+            print(
+                "substrate: several seats on this device — set JIEGOU_AGENT_NAME "
+                "to pull work here (identity is not inferred from the directory).",
+                file=sys.stderr,
+            )
+            return
     out = api("GET", "work")
     cmds, items = out.get("commands", []), out.get("items", [])
     print(f"substrate work for {out['agent']['name']} ({out['agent']['id']}):")
