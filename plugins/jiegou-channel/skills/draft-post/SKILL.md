@@ -60,8 +60,28 @@ grounding; this seat provides the drafting; the console provides the gate.
    runId makes these calls fail cleanly, which means STOP: the run was
    discarded while you worked.
 
+6b. **Cover image (mechanical archetypes only).** Render a cover, upload it, and
+   put the returned URL on the card:
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_cover.py" ./jiegou-gtm/posts/<date>-<slug>.md
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" asset --file <the .png it wrote> --kind li-cover --external-id "<date>-<slug>"
+   ```
+   The upload prints a console URL (`/api/gtm/assets/<id>`) — pass it as
+   `coverUrl` in the push payload below. **Only include `coverUrl` if the
+   upload actually printed one.** Never write a cover field for a file you did
+   not render and upload: on 2026-08-10 two cards carried a `coverPath` for
+   PNGs that never existed, and because the console displayed the path as text
+   the fabrication was invisible for six days. A URL the console can resolve
+   makes the claim checkable; a local path does not.
+
+   **When to skip:** the renderer is mechanical for hook-style covers, which is
+   the default. Skip (and say so in your report) for anything needing a
+   judgment call about the visual — a list post whose artifact framing you are
+   unsure of, or a post whose hook does not stand alone as a card. A missing
+   cover is fine; a wrong one costs the founder an edit at the gate.
+
 7. **Push to the approval queue:**
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","producedBy":"draft-post","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"}}]}'`
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","producedBy":"draft-post","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"[,"coverUrl":"<url from the asset upload>"]}}]}'`
    (`producedBy` attributes the item to this skill in the console's skill
    scorecard — always include it. If the dispatch carried `plannedFor`,
    add it to the payload too so the approver sees the planned slot on the
