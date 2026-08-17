@@ -102,10 +102,17 @@ If you are running UNATTENDED (scheduled/dispatched pull, no human to answer
 step 8), do NOT ask and do NOT guess the curation call. Run steps 1-7 normally
 (fetch → ground → synthesise → register the artifact → update the matrix — all
 reversible / plane-recorded), then:
-- **queue ZERO hooks** — hook selection is a human curation call; leave it;
+- **queue ZERO hooks via `hooks`** — hook selection stays a human curation call.
+  Instead, **submit the appendix candidates as PROPOSED** (0.13.2):
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py" propose-hooks '{"createdBy":"reddit-research","week":"<toDate>","hooks":[{"hook":"…","sourceUrl":"…","suggestedCategory":"F","crossRefNote":"…"}]}'`
+  Proposed hooks are fenced from the funnel by status (dispatch, autopilot, and
+  drafting-grounding all exclude them) until a human approves each one on
+  /jiegou/reddit (proposed→idea, which stamps the approving human). If
+  `propose-hooks` fails (older plane), fall back to listing the candidates only
+  in the review-handoff card below — never call plain `hooks` unattended;
 - still file the vocabulary candidates (review-gated — safe unattended);
 - **push a cockpit review-handoff** so a human finishes it from the console:
-  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"source":"local-skill","externalId":"reddit-review:<sub1>-<sub2>-<date>","bundle":"B5","kind":"signal","title":"Reddit round r/<sub1>+r/<sub2> ready — N hooks to pick","payload":{"briefPath":"<file>","candidateHooks":[…appendix hooks…],"note":"Unattended run prepared this; pick hooks from an interactive session or the console."}}]}'`
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"source":"local-skill","externalId":"reddit-review:<sub1>-<sub2>-<date>","bundle":"B5","kind":"signal","title":"Reddit round r/<sub1>+r/<sub2> ready — N hooks proposed","payload":{"briefPath":"<file>","proposedOnConsole":true,"note":"Unattended run proposed its candidate hooks (status=proposed); approve or decline them on /jiegou/reddit."}}]}'`
 - then `/jiegou:report` the command complete with the brief path.
 This is the same contract as dry-run: reversible work proceeds, judgment waits.
 

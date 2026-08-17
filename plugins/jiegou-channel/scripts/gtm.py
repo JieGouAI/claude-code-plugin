@@ -20,6 +20,9 @@ Reddit-research pipeline (R4 — tenant plugin skill, 2026-08-08):
   gtm.py reddit-matrix           # GET cross-research matrix (plane state)
   gtm.py reddit-matrix-put '<j>' # PUT merged matrix ({"matrix":...[, "runId":...]})
   gtm.py hooks '<json>'          # POST queue human-approved content hooks (funnel)
+  gtm.py propose-hooks '<json>'  # POST candidate hooks as status=proposed — fenced
+                                 #   from the funnel until console approval
+                                 #   (/jiegou/reddit, proposed→idea). Unattended-safe.
   gtm.py vocab '<json>'          # POST file vocabulary phrases for operator review
   gtm.py artifact '<json>'       # POST register a run receipt WITH content (indexed
                                  #   into the KB — the git-free tenant record)
@@ -220,6 +223,24 @@ def cmd_hooks(argv):
     print(f"gtm hooks: queued {queued} into the funnel{tail}")
 
 
+def cmd_propose_hooks(argv):
+    """POST /api/gtm/hooks with status='proposed' — submit CANDIDATE hooks from an
+    unattended round. Proposed hooks are fenced from the funnel (dispatch,
+    autopilot, and seat drafting-grounding all exclude them) until a human
+    approves each one on /jiegou/reddit (proposed→idea). This does NOT weaken
+    the curation-is-approval rule: nothing a seat proposes can be drafted or
+    dispatched until the console approval stamps the curating human."""
+    payload = _load_json_arg("propose-hooks", argv)
+    payload["status"] = "proposed"  # forced — this verb only proposes
+    status, data = _request("POST", "/api/gtm/hooks", payload)
+    if status >= 400 or not data.get("success"):
+        sys.exit(f"gtm propose-hooks: HTTP {status} — {data.get('error', '?')}")
+    queued = data.get("queued", "?")
+    asked = len(payload.get("hooks", [])) if isinstance(payload.get("hooks"), list) else None
+    tail = f" ({asked - queued} deduped)" if isinstance(asked, int) and isinstance(queued, int) and asked > queued else ""
+    print(f"gtm propose-hooks: {queued} candidate(s) awaiting console curation{tail}")
+
+
 def cmd_vocab(argv):
     """POST /api/gtm/vocabulary-requests — file practitioner phrases for operator
     review (NEVER auto-applied to the editorial guide; a human curates voice)."""
@@ -327,6 +348,8 @@ def main():
         cmd_reddit_matrix_put(rest)
     elif cmd == "hooks":
         cmd_hooks(rest)
+    elif cmd == "propose-hooks":
+        cmd_propose_hooks(rest)
     elif cmd == "vocab":
         cmd_vocab(rest)
     elif cmd == "artifact":
