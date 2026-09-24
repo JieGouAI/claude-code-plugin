@@ -89,6 +89,26 @@ grounding; this seat provides the drafting; the console provides the gate.
    — the payload must be execution-complete (full text, not a pointer): the
    approver ships from the card. Then `state` again with `"status":"gated"`.
 
+   **Notes for the approver go ON the post card (0.13.3, founder ruling
+   2026-09-23).** Anything the approver should weigh before publishing
+   (naming a company, a conflict-of-interest line, verify-before-sending, a
+   shelf-life date, a hook defect you corrected, source/author frequency, a
+   same-day slot collision) goes in the SAME push as a plain-text
+   `"approverNotes"` string field (short lines, most important first). The
+   console renders it as a block on the card the approver ships from.
+   **Do NOT push a separate B5 batch-review card** summarizing the run: it
+   duplicated the post cards, buried the real decisions among FYIs, and had to
+   be matched back to the posts by hand. FYI-only facts (lint passed, cover
+   uploaded, 0 hooks filed, categories kept) go in the `/jiegou:report` note,
+   not on any card.
+
+   **The one B5 card that stays: a FAILED close.** When a hook dispatch closes
+   FAILED (primary unreadable, spent/re-dispatched source, false central
+   claim), push ONE B5 `signal` card for that hook with a structured
+   kill-or-re-dispatch judgment call and the verification note, keyed
+   `hook-failed:<hookId>` so a repeat failure refreshes the same card instead
+   of adding one.
+
 8. **Close with the handoff:** if this seat has calendar-sync enabled
    (`~/.jiegou/calendar-sync-enabled-<seat>.json` exists), run
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/calendar_sync.py" sync` so any
