@@ -36,13 +36,36 @@ grounding; this seat provides the drafting; the console provides the gate.
    draft the planned FIRST COMMENT per the guide's first-comment rule.
    Choose the category letter from the guide's taxonomy.
 
-4. **Lint until clean:** write the body and first comment to temp files, run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/li_lint.py" <body> --first-comment <fc>`.
-   Fix every HARD fail; address warnings or explain them to the user.
+   **Hook variants + only-me (0.14.0) — mandatory when the guide sets
+   `draftChecks`** (look in the pulled guide; when absent, these are optional):
+   - Write `draftChecks.hookVariants` hook variants (usually 3), **at least one
+     first-person** ("I…", "We…"), each signaling why the author is credible on
+     this and what the reader gets. Pick one to open the body.
+   - Name the **only-me element**: the detail only the author could write (their
+     own operation, their data, something they built or decided). Test: if
+     someone else could post this exact text unchanged, it is missing the author.
+     Put it IN the body, not only in the notes.
+   - **Never invent it.** A seat sees hooks, sources and the research corpus,
+     not the author's private operation. Use an operating fact only when it is
+     stated in grounding you actually pulled (a hook, the corpus, a source).
+     When none is available, write `"ONLY-ME NEEDED: <the angle you would
+     use>"` as the only-me value, keep the body honest without it, and make
+     that line the FIRST line of `approverNotes` so the approver adds the
+     detail at the gate. A flagged gap is correct; a fabricated detail is the
+     worst possible output here.
+   - A first-person operating detail is not a plug; product names, feature
+     claims, links to buy and CTAs are (unless the guide says otherwise).
+
+4. **Lint until clean:** write the body and first comment to temp files, and
+   (when the guide sets `draftChecks`) a meta file
+   `{"hookVariants":["…","…","…"],"onlyMe":"…"}`; run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/li_lint.py" <body> --first-comment <fc> --meta <meta.json>`.
+   Fix every HARD fail (missing meta, too few variants, no first-person
+   variant and an empty only-me are HARD); address warnings or explain them.
 
 5. **Save the artifact** to `./jiegou-gtm/posts/<date>-<slug>.md` in the
-   user's project (title, category, body, first comment, source line) — their
-   local record.
+   user's project (title, category, body, first comment, source line, hook
+   variants, only-me line) — their local record.
 
 6. **Register state:**
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py" state '{"externalId":"<date>-<slug>","status":"drafted","title":"<hook first line>","category":"<letter>"[,"hookId":"<id>"][,"scheduledSlot":"<YYYY-MM-DD>"]}'`
@@ -81,7 +104,7 @@ grounding; this seat provides the drafting; the console provides the gate.
    cover is fine; a wrong one costs the founder an edit at the gate.
 
 7. **Push to the approval queue:**
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","producedBy":"draft-post","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"[,"coverUrl":"<url from the asset upload>"]}}]}'`
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" push '{"items":[{"externalId":"<date>-<slug>","bundle":"B2","kind":"li-post","title":"<hook first line>","source":"local-skill","producedBy":"draft-post","payload":{"body":"<FULL post text>","firstComment":"<FULL first comment>"[,"hookVariants":["…","…","…"],"onlyMe":"<only-me line>"][,"coverUrl":"<url from the asset upload>"]}}]}'`
    (`producedBy` attributes the item to this skill in the console's skill
    scorecard — always include it. If the dispatch carried `plannedFor`,
    add it to the payload too so the approver sees the planned slot on the
@@ -96,6 +119,9 @@ grounding; this seat provides the drafting; the console provides the gate.
    same-day slot collision) goes in the SAME push as a plain-text
    `"approverNotes"` string field (short lines, most important first). The
    console renders it as a block on the card the approver ships from.
+   When the guide sets `draftChecks`, approverNotes also lists the hook
+   variants (marking the one used) and the only-me line, so the approver can
+   swap the opening at the gate; an `ONLY-ME NEEDED` flag is always line one.
    **Do NOT push a separate B5 batch-review card** summarizing the run: it
    duplicated the post cards, buried the real decisions among FYIs, and had to
    be matched back to the posts by hand. FYI-only facts (lint passed, cover

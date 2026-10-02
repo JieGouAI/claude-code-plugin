@@ -7,10 +7,19 @@ the model provides the ceiling, this guards the floor.
 
   li_lint.py <textfile>                  # lint a plain-text post body
   li_lint.py <textfile> --first-comment <file>
+  li_lint.py <textfile> --meta <meta.json>   # draft checks (0.14.0)
 
 HARD fails (exit 1): banned patterns, '--' instead of an em-dash, body over
 the hard char cap. Warnings: over the norm length, em-dash density per
 paragraph, poll/CTA phrasing, verb-only words, no hashtags.
+Draft checks (0.14.0): when the account's editorial guide sets `draftChecks`,
+`--meta` is REQUIRED and checked as HARD fails. meta.json:
+  {"hookVariants": ["...", "...", "..."], "onlyMe": "<the detail only the author could write>"}
+- hookVariants: at least draftChecks.hookVariants entries, at least one first-person.
+- onlyMe: non-empty. "ONLY-ME NEEDED: <suggested angle>" passes with a warning:
+  it is the honest form when the seat cannot ground a detail from the author's own
+  operation (never invent one), and the approver supplies it at the gate.
+Accounts without draftChecks are unaffected.
 Requires a pulled voice profile (run `gtm.py pull` first) — there is no
 built-in fallback on tenant seats; the profile IS the voice.
 """
@@ -24,12 +33,16 @@ sys.path.insert(0, HERE)
 import substrate  # noqa: E402
 
 
-def load_profile():
+def load_grounding():
     p = os.path.expanduser(f"~/.jiegou/gtm-grounding-{substrate._seat_name()}.json")
     if not os.path.exists(p):
         sys.exit("li_lint: no grounding cache — run `gtm.py pull` first.")
     with open(p) as f:
-        data = json.load(f)
+        return json.load(f)
+
+
+def load_profile(data=None):
+    data = data if data is not None else load_grounding()
     prof = data.get("voiceProfile")
     if not prof:
         sys.exit(
@@ -69,12 +82,43 @@ def lint_body(body, label, prof, hard, warn):
     return body.strip().replace("\n", " ")[: prof.get("hookChars", 210)]
 
 
+FIRST_PERSON = re.compile(r"\b(I|I'm|I've|I'd|me|my|we|we're|we've|us|our)\b", re.I)
+
+
+def check_draft_meta(checks, meta, hard, warn):
+    """The guide's structured draft checks. `checks` falsy = nothing to enforce."""
+    if not checks:
+        return
+    if meta is None:
+        hard.append("draft checks: this account's guide requires --meta (hook variants + only-me)")
+        return
+    want = checks.get("hookVariants")
+    if want:
+        hv = [v for v in (meta.get("hookVariants") or []) if isinstance(v, str) and v.strip()]
+        if len(hv) < want:
+            hard.append(f"hook variants: {len(hv)} found, the guide requires {want}")
+        if hv and not any(FIRST_PERSON.search(v) for v in hv):
+            hard.append("hook variants: none is first-person (the guide requires at least one)")
+    if checks.get("onlyMe"):
+        om = (meta.get("onlyMe") or "").strip()
+        if not om:
+            hard.append("only-me: empty — name the detail only the author could write, or write 'ONLY-ME NEEDED: <angle>'")
+        elif om.upper().startswith("ONLY-ME NEEDED"):
+            warn.append("only-me: flagged ONLY-ME NEEDED — put it first in approverNotes so the approver supplies it")
+
+
 def main():
     argv = sys.argv[1:]
     if not argv:
         sys.exit(__doc__.strip())
-    prof = load_profile()
+    data = load_grounding()
+    prof = load_profile(data)
     hard, warn = [], []
+    meta = None
+    if "--meta" in argv:
+        with open(argv[argv.index("--meta") + 1]) as f:
+            meta = json.load(f)
+    check_draft_meta(((data.get("editorialGuide") or {}).get("draftChecks")), meta, hard, warn)
     with open(argv[0]) as f:
         hook = lint_body(f.read(), "post", prof, hard, warn)
     if "--first-comment" in argv:
