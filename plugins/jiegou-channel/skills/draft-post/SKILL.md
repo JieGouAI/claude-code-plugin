@@ -46,9 +46,16 @@ grounding; this seat provides the drafting; the console provides the gate.
      someone else could post this exact text unchanged, it is missing the author.
      Put it IN the body, not only in the notes.
    - **Never invent it.** A seat sees hooks, sources and the research corpus,
-     not the author's private operation. Use an operating fact only when it is
-     stated in grounding you actually pulled (a hook, the corpus, a source).
-     When none is available, write `"ONLY-ME NEEDED: <the angle you would
+     not the author's private operation. **The source for an only-me line is
+     the pulled `operatingFacts` list (0.15.0)**: dated, sourced facts the
+     account has published for exactly this purpose (approval-queue stats, run
+     records, model changes, curated incidents and decisions). Pick the fact
+     that genuinely bears on the post's argument; phrase it in the author's
+     first person without changing a number, a date or a claim; and cite it in
+     `approverNotes` as `ONLY-ME: <fact id> (<fact date>)`. Never combine facts
+     into a new claim, never extrapolate a trend from one stat, and never use a
+     fact that does not fit just to have one. A first-person fact stated in an
+     essay from the corpus also counts. When nothing fits, write `"ONLY-ME NEEDED: <the angle you would
      use>"` as the only-me value, keep the body honest without it, and make
      that line the FIRST line of `approverNotes` so the approver adds the
      detail at the gate. A flagged gap is correct; a fabricated detail is the

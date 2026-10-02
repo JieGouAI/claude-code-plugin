@@ -94,10 +94,13 @@ def cmd_pull():
         ("voiceProfile", "/api/gtm/voice-profile", "profile"),
         ("editorialGuide", "/api/gtm/editorial-guide", "guide"),
         ("ideaHooks", "/api/gtm/hooks?status=idea", "hooks"),
+        # 0.15.0: dated facts about the account's own operation — the ONLY source a
+        # seat may use for a post's only-me line. Optional: absent = flag ONLY-ME NEEDED.
+        ("operatingFacts", "/api/gtm/operating-facts", "facts"),
     ]:
         status, data = _request("GET", path)
         out[key] = data.get(field) if status == 200 else None
-        if out[key] is None and key != "ideaHooks":
+        if out[key] is None and key not in ("ideaHooks", "operatingFacts"):
             missing.append(key)
     p = _cache_path()
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -109,6 +112,7 @@ def cmd_pull():
         f"  voice profile: {'✓' if out.get('voiceProfile') else '✗ (not configured)'}"
         f" · editorial guide: {'✓' if out.get('editorialGuide') else '✗ (not configured)'}"
         f" · idea hooks: {len(hooks)}"
+        f" · operating facts: {len(out.get('operatingFacts') or [])}"
     )
     if missing:
         print(
