@@ -140,7 +140,23 @@ grounding; this seat provides the drafting; the console provides the gate.
    claim), push ONE B5 `signal` card for that hook with a structured
    kill-or-re-dispatch judgment call and the verification note, keyed
    `hook-failed:<hookId>` so a repeat failure refreshes the same card instead
-   of adding one.
+   of adding one. The payload shape is fixed — the cockpit's Reporting triage
+   turns it into one-click **Kill hook / Keep** rows (and "kill all
+   recommended"), and options written as plain strings or without `hookId`
+   render as a question with nothing to click:
+
+   ```json
+   {"externalId":"hook-failed:<hookId>","bundle":"B5","kind":"signal",
+    "title":"Hook failed: <hook, short>","source":"local-skill","producedBy":"draft-post",
+    "payload":{"hookId":"<hookId>","commandId":"<this command>",
+      "verification":"<why it failed — source, figure, prior use>",
+      "judgmentCalls":[{"id":"kill-or-keep","question":"Kill this hook, or keep it for an edited re-dispatch?",
+        "options":[{"id":"kill","label":"Kill","detail":"<one line why>","recommended":true},
+                   {"id":"keep","label":"Keep and edit","detail":"<what would have to change>"}]}]}}
+   ```
+
+   Set `recommended: true` on exactly one option (on `keep` when the failure
+   was transient — e.g. a fetch timeout on a primary that is normally readable).
 
 8. **Close with the handoff:** if this seat has calendar-sync enabled
    (`~/.jiegou/calendar-sync-enabled-<seat>.json` exists), run
