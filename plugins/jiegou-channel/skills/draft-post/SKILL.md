@@ -183,6 +183,17 @@ re-drafted by the next session (the 2026-08-13 duplicate-DSO incident). If the
 draft genuinely failed, close with `--failed` instead — a truthful failure
 beats a dangling command.
 
+**Refused or failed? (0.16.0)** When YOUR rules said no — the hook's central
+claim is not in its source, the source is spent or already used, the primary
+cannot be read and you will not draft from an unread source — close with
+`--refused --note "<the rule, and what you checked>"`, not `--failed`. Use
+`--failed` only when something broke (a tool, the plane, a fetch timeout on a
+primary that is normally readable) and a retry might succeed. The plane counts
+refusals as a control working, apart from failures, on the proof surface and
+the command-health watchdog. The FAILED-close B5 card above is filed either way.
+If the console rejects the verdict (an older self-hosted console), close with
+`--failed` and the same note.
+
 **Headless note (2026-08-08 — T1):** draft-post is already gate-safe unattended — it drafts one
 post from one hook and pushes it to the cockpit gate (human approves; nothing publishes). The only
 unattended caveat: do NOT commit the local artifact to main from a headless run; the cockpit

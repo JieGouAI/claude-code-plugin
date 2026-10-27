@@ -15,7 +15,10 @@ makes it governed.
             substrate.py progress --command <cmdId> "phase message" \
                 [--step K --total N]             # mid-run beat (L1 progress-streaming)
             substrate.py report [--item <id>] [--command <id>] [--note "…"]  (one of --item/--command required) \
-                [--artifact <path>] [--failed]
+                [--artifact <path>] [--failed | --refused]
+                --refused: you ran it and DELIBERATELY declined under your own rules
+                (the hook's claim is not in its source, the source is spent);
+                requires --note naming the rule. Counted apart from failures.
   daemon:   substrate.py wake --on-wake "<cmd>"  # hold the SSE doorbell; run <cmd>
                                                  # on connect/wake/10-min heartbeat
                                                  # (installed by setup_pull.py --wake)
@@ -486,11 +489,25 @@ def cmd_report(args):
     cmd = args.get("--command")
     if not item and not cmd:
         sys.exit("substrate report: --item <itemId> (or --command <cmdId> for an item-less command) required")
+    refused = bool(args.get("--refused"))
+    if refused and args.get("--failed"):
+        sys.exit("substrate report: --failed and --refused are contradictory — pick the one you can defend")
+    note = args.get("--note") if isinstance(args.get("--note"), str) else ""
+    if refused and not note.strip():
+        # The plane rejects a bare refusal: without the rule you declined under,
+        # a refusal is indistinguishable from a seat that gave up.
+        sys.exit("substrate report: --refused requires --note \"<which rule you declined under, and why>\"")
+    failed = refused or bool(args.get("--failed"))
+    label = "REFUSAL" if refused else ("FAILURE" if failed else "completion")
     result = {}
-    if args.get("--note"):
-        result["note"] = args["--note"]
+    if note:
+        result["note"] = note
     if args.get("--artifact"):
         result["artifactFile"] = args["--artifact"]
+    if refused:
+        # 0.16.0: a deliberate decline is its own verdict. The item-less route
+        # reads it from result.verdict; the item route from the body verdict.
+        result["verdict"] = "refused"
     if not item:
         # Item-less plane command (pull showed item=None — e.g. a hook dispatch whose
         # deliverable is a gated draft, pushed separately): complete it directly.
@@ -498,17 +515,19 @@ def cmd_report(args):
         # (first unattended run delivered its drafts, then left 3 commands dangling).
         api("PUT", f"commands/{cmd}", {
             "action": "complete",
-            "success": "--failed" not in args,
+            "success": not failed,
             "result": result,
         })
-        print(f"substrate: reported {'FAILURE' if '--failed' in args else 'completion'} — command {cmd} closed (no item)")
+        print(f"substrate: reported {label} — command {cmd} closed (no item)")
         return
-    body = {"itemId": item, "success": "--failed" not in args, "result": result}
+    body = {"itemId": item, "success": not failed, "result": result}
+    if refused:
+        body["verdict"] = "refused"
     if cmd:
         body["commandId"] = cmd
     out = api("POST", "report", body)
     state = (out.get("item") or {}).get("state")
-    print(f"substrate: reported {'FAILURE' if '--failed' in args else 'completion'} — item state: {state}")
+    print(f"substrate: reported {label} — item state: {state}")
 
 
 def _parse_flags(argv):
