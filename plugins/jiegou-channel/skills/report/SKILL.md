@@ -5,7 +5,7 @@ description: Report completion (or failure) of JieGou-dispatched work back to th
 
 Close the loop on plane-dispatched work:
 
-`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" report --item <itemId> [--command <commandId>] [--note "…"] [--artifact <path>] [--failed]`
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/substrate.py" report --item <itemId> [--command <commandId>] [--note "…"] [--artifact <path>] [--failed | --refused]`
 
 Rules:
 - `--item` is required — it's the id shown by `/jiegou:pull`. Include
@@ -17,6 +17,10 @@ Rules:
 - **Never report success for unfinished or failed work.** If the work could
   not be completed, report honestly with `--failed` and a note explaining why —
   a failed report releases the item; a false success corrupts the audit trail.
+- **`--refused` is for a deliberate decline** under the work's own rules (the
+  claim is not in its source, the source is spent, a policy forbids it). It
+  requires a `--note` naming the rule. Nothing landed, as with `--failed`, but
+  the plane counts it as a control working, not a breakage.
 - Confirm the printed item state back to the user (normally `executed`).
 
 Do not end a session holding pulled work unreported: either report success
