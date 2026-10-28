@@ -258,11 +258,50 @@ def _jwt_claims(token):
         return {}
 
 
+CLIENT_VERSION_HEADER = "X-Substrate-Client"
+_CLIENT_VERSION = None
+
+
+def _client_version():
+    """`jiegou-plugin/<version>` from this plugin's plugin.json (0.16.1).
+
+    Sent on every plane call as X-Substrate-Client so the plane records WHICH
+    client version claimed, pulled and reported each command, and the console
+    can show which seats still need `claude plugin update`. The plugin is laid
+    out as <root>/scripts/substrate.py next to <root>/.claude-plugin/plugin.json
+    (repo and installed cache alike). Cached per process; any failure reads
+    `jiegou-plugin/unknown` and never blocks a call.
+    """
+    global _CLIENT_VERSION
+    if _CLIENT_VERSION is None:
+        version = ""
+        try:
+            path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", ".claude-plugin", "plugin.json"
+            )
+            with open(path) as f:
+                version = str(json.load(f).get("version", "")).strip()
+        except Exception:
+            version = ""
+        ok = bool(version) and len(version) <= 40 and all(
+            c.isalnum() or c in ".+-" for c in version
+        )
+        _CLIENT_VERSION = f"jiegou-plugin/{version if ok else 'unknown'}"
+    return _CLIENT_VERSION
+
+
+def _plane_headers(extra):
+    """Merge the client-version header into a request's own headers."""
+    hdrs = dict(extra)
+    hdrs[CLIENT_VERSION_HEADER] = _client_version()
+    return hdrs
+
+
 def _http_json(method, url, body=None, headers=None):
     req = urllib.request.Request(
         url,
         data=json.dumps(body).encode() if body is not None else None,
-        headers=headers or {"Content-Type": "application/json"},
+        headers=_plane_headers(headers or {"Content-Type": "application/json"}),
         method=method,
     )
     try:
@@ -681,7 +720,7 @@ def cmd_asset(args):
     req = urllib.request.Request(
         f"{base}/api/hybrid-agents/{agent_id}/assets",
         data=body,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers=_plane_headers({"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
         method="POST",
     )
     try:
@@ -721,7 +760,7 @@ def cmd_wake(args):
         token, agent_id, base = sess
         req = urllib.request.Request(
             f"{base}/api/hybrid-agents/{agent_id}/wake",
-            headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"},
+            headers=_plane_headers({"Authorization": f"Bearer {token}", "Accept": "text/event-stream"}),
         )
         try:
             with urllib.request.urlopen(req, timeout=WAKE_READ_TIMEOUT) as resp:
