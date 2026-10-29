@@ -141,22 +141,42 @@ grounding; this seat provides the drafting; the console provides the gate.
    kill-or-re-dispatch judgment call and the verification note, keyed
    `hook-failed:<hookId>` so a repeat failure refreshes the same card instead
    of adding one. The payload shape is fixed — the cockpit's Reporting triage
-   turns it into one-click **Kill hook / Keep** rows (and "kill all
-   recommended"), and options written as plain strings or without `hookId`
-   render as a question with nothing to click:
+   turns it into one-click **Kill hook / Replace… / Keep as is** rows (and
+   "kill all recommended"), and options written as plain strings or without
+   `hookId` render as a question with nothing to click:
 
    ```json
    {"externalId":"hook-failed:<hookId>","bundle":"B5","kind":"signal",
     "title":"Hook failed: <hook, short>","source":"local-skill","producedBy":"draft-post",
     "payload":{"hookId":"<hookId>","commandId":"<this command>",
       "verification":"<why it failed — source, figure, prior use>",
+      "replacement":{"hook":"<corrected hook>","sourceUrl":"<https URL you read>",
+        "sourceQuote":"<the passage that carries the claim>","suggestedCategory":"<A|B|C|E|F>"},
       "judgmentCalls":[{"id":"kill-or-keep","question":"Kill this hook, or keep it for an edited re-dispatch?",
         "options":[{"id":"kill","label":"Kill","detail":"<one line why>","recommended":true},
-                   {"id":"keep","label":"Keep and edit","detail":"<what would have to change>"}]}]}}
+                   {"id":"keep","label":"Keep and replace","detail":"<what the replacement fixes>"}]}]}}
    ```
 
    Set `recommended: true` on exactly one option (on `keep` when the failure
    was transient — e.g. a fetch timeout on a primary that is normally readable).
+
+   **`replacement` is optional (0.16.2), and only for a fix you actually read.**
+   The cockpit's **Replace…** opens pre-filled from it: one click files the
+   corrected hook (the console runs its source check), drops the old one and
+   can send the new one to a seat. Include it ONLY when, while verifying, you
+   found and READ a source that carries a correct version of the claim (e.g.
+   the primary was blocked but a trade outlet reprinted the study, and its
+   figure differs from the hook's). Then `hook` is the corrected hook text,
+   `sourceUrl` the full http(s) URL you read, `sourceQuote` the passage (≤500
+   chars) that carries the claim word for word, and `suggestedCategory` one
+   of A/B/C/E/F (omit to keep the old hook's). When you only know the hook is
+   wrong but have no readable source for a right version, OMIT `replacement`
+   entirely and say what is missing in `verification`; the operator then
+   writes the fix. Never guess a figure, never cite a URL you did not open,
+   and never "repair" a claim by softening it until no source is needed: a
+   pre-filled replacement looks vetted, so a wrong one is worse than none.
+   With a `replacement`, `keep` is usually the recommended option (its
+   `detail` names the fix); a hook with no fixable claim stays `kill`.
 
 8. **Close with the handoff:** if this seat has calendar-sync enabled
    (`~/.jiegou/calendar-sync-enabled-<seat>.json` exists), run
