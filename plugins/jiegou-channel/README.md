@@ -78,9 +78,12 @@ on the plane until the seat **pulls**:
   enrolled.)
 - **On demand:** `/jiegou:pull` any time.
 - **Unattended (optional, off by default):** run `/jiegou:setup-pull` — it
-  installs, with your explicit confirmation, a scheduled check (launchd on
-  macOS, cron on Linux) that launches a headless session ONLY when the
-  console has assigned work; idle checks are free. `setup_pull.py status`
+  installs, with your explicit confirmation, either a wake daemon (macOS,
+  `--wake`: pulls within seconds of a dispatch) or a scheduled check every N
+  minutes (launchd on macOS, cron on Linux). Either one launches a headless
+  session ONLY when the console has assigned work; idle checks are free.
+  Re-run the install after each plugin update — the job runs the plugin
+  version it was installed from. `setup_pull.py status`
   inspects it, `uninstall` removes it completely. This is always a deliberate
   opt-in — the plugin never installs persistence on its own. Approvals and
   publishing remain human actions regardless of how the seat pulls.
