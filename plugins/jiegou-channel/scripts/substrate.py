@@ -324,6 +324,16 @@ def _do_refresh(sess):
         sys.exit("substrate: session has no refresh token — re-enroll with `login --enroll <code>`")
     status, out = _http_json("POST", f"{_console_base()}/api/agent/token", {"refreshToken": rt})
     if status != 200:
+        # Refresh race (0.16.3, ported from the orion repo copy): rotation kills the
+        # old refresh token at once, so when two processes on this seat refresh in
+        # the same minute (the wake daemon and the pull it fires) the loser presents
+        # a dead token. The winner already saved the new pair: re-read it before
+        # declaring the session lost.
+        fresh = load_session(force=True)
+        if fresh and fresh.get("refreshToken") and fresh.get("refreshToken") != rt:
+            left = _expires_in(fresh.get("accessExpiresAt"))
+            if left is not None and left > 60:
+                return fresh
         sys.exit(
             f"substrate: session refresh failed ({out.get('error', '?')}) — "
             "re-enroll: `substrate.py login --enroll <code>`"
@@ -752,7 +762,16 @@ def cmd_wake(args):
         last_run = time.time()
 
     while True:
-        sess = _session_bearer()
+        # Re-read the keychain every cycle (0.16.3): the pull this daemon fires runs
+        # in another process and rotates the refresh token, so a cached pair goes
+        # stale. A hard refresh failure logs and retries instead of exiting.
+        try:
+            load_session(force=True)
+            sess = _session_bearer()
+        except SystemExit as e:
+            _wake_log(f"session unavailable ({e}) — retrying in 60s")
+            time.sleep(60)
+            continue
         if not sess:
             _wake_log("not enrolled — retrying in 60s")
             time.sleep(60)

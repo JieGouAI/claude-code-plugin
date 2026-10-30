@@ -8,10 +8,16 @@ on the user's machine — only ever at their explicit request, with the shape
 spelled out before anything is written.
 
 1. **Explain before installing** (plainly, all four points):
-   - A scheduled job (macOS launchd / Linux cron) will run every N minutes
-     (default 30). Each run does a FREE local check first; a headless Claude
-     session launches ONLY when the console has actually assigned work — so
-     idle periods consume nothing.
+   - A background job will check for assigned work. Each check is a FREE local
+     pull first; a headless Claude session launches ONLY when the console has
+     actually assigned work — so idle periods consume nothing. Two modes:
+     - **Wake (recommended on macOS, `--wake`):** a launchd KeepAlive daemon
+       holds the seat's wake stream and pulls within seconds of a dispatch,
+       on every reconnect, and on a 10-minute heartbeat. The server recycles
+       the stream about every 10 minutes, so expect a pull roughly that often.
+     - **Interval (`--interval N`, default 30 min; the only mode on Linux):**
+       a launchd/cron job checks every N minutes, so dispatched work can wait
+       up to N minutes.
    - Runs that do work use their Claude subscription usage.
    - Approvals and publishing stay human regardless — unattended runs stop at
      the same gates; anything needing interactive input is left for a real
@@ -19,18 +25,25 @@ spelled out before anything is written.
    - It's fully inspectable and reversible: `status` shows the schedule and
      recent log; `uninstall` removes everything.
 
-2. **Confirm the interval** (default 30 min; minimum 5) and that they want it
-   installed. Do not proceed on ambiguity.
+2. **Confirm the mode** (wake, or interval with N ≥ 5 min) and that they want
+   it installed. Do not proceed on ambiguity.
 
-3. **Install:** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_pull.py" install [--interval N]`
-   — requires an enrolled seat (route to `/jiegou:enroll` if not) and the
-   `claude` CLI on PATH. Relay the printed wrapper/log/removal paths.
+3. **Install:** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_pull.py" install --wake`
+   or `... install [--interval N]` — requires an enrolled seat (route to
+   `/jiegou:enroll` if not) and the `claude` CLI on PATH. On a machine with
+   more than one enrolled seat, set `JIEGOU_AGENT_NAME=<seat>` on the command
+   (seat identity is never guessed). Relay the printed wrapper/log/removal paths.
 
 4. **Verify:** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_pull.py" status`
    and show the user the result.
 
 5. **Removal, any time:** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_pull.py" uninstall`
    — mention this unprompted at the end of setup.
+
+6. **After every plugin update, re-run `install` with the same mode** — say so
+   unprompted. The installed job names this plugin version's directory, so it
+   keeps running the old version until reinstalled, and stops working once
+   the old directory is cleaned up. `status` shows which path it runs.
 
 For "is it running / what has it done": run `status` and read the last lines
 of the log at `~/.jiegou/logs/pull-<seat>.log`.
